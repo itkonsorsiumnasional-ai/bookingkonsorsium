@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KN Booking System</title>
+<style>
+:root{--navy:#102a43;--blue:#1769aa;--red:#d52b38;--gold:#f3c542;--bg:#f4f7fb;--text:#1f2937;--muted:#667085;--line:#e4e9f0}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{background:linear-gradient(120deg,var(--navy),#174d78);color:white;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.brand{display:flex;align-items:center;gap:14px}.logo{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,var(--blue),var(--red),var(--gold));display:grid;place-items:center;font-weight:900;font-size:20px}.brand h1{margin:0;font-size:19px}.brand small{opacity:.8}
+main{max-width:1400px;margin:auto;padding:22px}.nav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}.nav button{background:white;color:var(--navy);border:1px solid var(--line)}button{border:0;border-radius:9px;padding:10px 14px;cursor:pointer;font-weight:650;background:var(--blue);color:white}button:hover{filter:brightness(.95)}.nav button.active{background:var(--navy);color:white}
+.panel{background:white;border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:18px;box-shadow:0 3px 12px #1c355710}.panel h2{margin:0 0 15px;font-size:18px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}.stat{background:white;border:1px solid var(--line);border-radius:13px;padding:16px}.stat label{color:var(--muted);display:block;margin-bottom:8px}.stat strong{font-size:24px;color:var(--navy)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+label{display:block;font-size:12px;color:var(--muted);font-weight:650;margin:0 0 5px}input,select,textarea{width:100%;border:1px solid #d6dde7;border-radius:8px;padding:10px;font:inherit;background:white}textarea{min-height:70px}form .field{margin-bottom:12px}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.secondary{background:#e9eff6;color:var(--navy)}.danger{background:#c62828}.gold{background:#e8b323;color:#17212b}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line);vertical-align:top}th{background:#f7f9fc;color:var(--navy)}.table-wrap{overflow:auto}.empty{padding:25px;text-align:center;color:var(--muted)}.hidden{display:none!important}.tag{display:inline-block;padding:3px 8px;border-radius:999px;background:#eef3f8;color:#345; font-size:11px}
+.small{font-size:12px;color:var(--muted)}.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:12px}.toolbar input{max-width:280px}
+footer{text-align:center;color:var(--muted);padding:25px}
+@media(max-width:800px){main{padding:12px}.grid,.grid3{grid-template-columns:1fr}header{padding:16px}.brand h1{font-size:17px}}
+@media print{body{background:white}header,.nav,button,.toolbar,.no-print{display:none!important}main{padding:0}.panel{border:0;box-shadow:none}}
+ 
+body{background:#f6f8fb;color:#26354b}
+header{height:82px;background:#fff;color:#243b63;border-bottom:1px solid #edf0f5;padding:14px 28px;position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 10px #142b4906}
+.top-brand{display:flex;align-items:center;gap:12px}.top-brand h1{font-size:14px;letter-spacing:.3px;color:#2448b7;margin:0}.top-brand h1 span{color:#f39a27}.top-brand small{color:#8795aa;font-size:10px}
+.logo{width:42px;height:42px;border-radius:12px;background:#2448b7;color:white;display:grid;place-items:center;font-weight:900}
+.top-actions{display:flex;align-items:center;gap:12px}.top-search{border-radius:24px;background:#f5f7fa;padding:9px 13px;color:#91a0b5;display:flex;gap:8px;align-items:center;width:min(300px,30vw)}.top-search input{border:0;background:transparent;padding:0;outline:0}.icon-btn{background:#f6f8fb;color:#6e819e;border-radius:50%;width:38px;height:38px;padding:0;font-size:18px}.user-chip{display:flex;align-items:center;gap:10px;color:#34425a;font-size:11px}.user-chip small{display:block;color:#f28b27;font-size:9px;text-align:right;letter-spacing:1px}.avatar{width:40px;height:40px;border-radius:50%;background:#2448b7;color:white;display:grid;place-items:center;font-size:17px}
+main{max-width:none;margin:0;padding:0 0 0 230px;min-height:calc(100vh - 82px)}
+.nav{position:fixed;top:82px;left:0;bottom:0;width:230px;background:#fff;border-right:1px solid #edf0f5;padding:24px 16px;display:flex;flex-direction:column;gap:7px;z-index:9;overflow:auto}
+.nav button{width:100%;text-align:left;display:flex;align-items:center;gap:12px;padding:13px 16px;border-radius:28px;background:white;color:#71829d;border:0;font-size:11px;letter-spacing:.5px;font-weight:750;transition:.15s}
+.nav button:before{content:'◈';font-size:15px;color:#9aaec9}.nav button.active{background:#2448b7;color:white;box-shadow:0 5px 12px #2448b733}.nav button.active:before{color:white}
+.tab{padding:30px 32px;min-height:calc(100vh - 82px)}.tab.hidden{display:none!important}
+.panel{border:1px solid #edf0f5;border-radius:18px;box-shadow:0 4px 18px #152b4905;padding:22px}
+.stat{border:1px solid #eef1f5;border-radius:22px;padding:22px;box-shadow:0 4px 16px #142b4905}.stat strong{color:#2448b7}
+button{border-radius:10px}.nav button{border-radius:28px}
+footer{padding:15px 30px;margin-left:230px;font-size:10px;text-transform:uppercase;letter-spacing:1px}
+#dashboard:before{content:'⌂  DASHBOARD';display:block;color:#2448b7;font-size:10px;font-weight:800;letter-spacing:1px;margin:0 0 12px}
+#dashboard h2{font-size:22px}
+@media(max-width:900px){main{padding-left:0}.nav{position:relative;top:auto;left:auto;bottom:auto;width:auto;display:flex;flex-direction:row;overflow-x:auto;padding:10px}.nav button{white-space:nowrap;width:auto}.tab{padding:18px}.top-search{display:none}footer{margin-left:0}}
+</style>
+</head>
+<body>
+<header>
+<div class="top-brand"><div class="logo">KN</div><div><h1>KONSORSIUM <span>NASIONAL</span></h1><small>Travel partner with heart</small></div></div>
+<div class="top-actions"><div class="top-search">⌕ <input placeholder="Cari data, booking, agent..." /></div><button class="icon-btn" title="Home">⌂</button><button class="icon-btn" title="Notifikasi">♧</button><div class="user-chip"><div><b>ADMIN KN</b><small>MANAGER</small></div><div class="avatar">K</div></div><span id="clock" class="clock"></span></div>
+</header>
+<main>
+<div class="nav">
+<button class="active" data-tab="dashboard">Dashboard</button><button data-tab="departures">Keberangkatan</button><button data-tab="bookings">Booking</button><button data-tab="agents">Agent</button><button data-tab="participants">Peserta</button><button data-tab="rooming">Rooming</button><button data-tab="reports">Rekap & Export</button><button data-tab="payments">Pembayaran</button><button data-tab="settings">Pengaturan</button>
+</div>
+<section id="dashboard" class="tab">
+<div class="cards" id="stats"></div>
+<div class="panel"><h2>Keberangkatan mendatang</h2><div class="table-wrap"><table id="dashDep"></table></div></div>
+<div class="panel"><h2>Booking terbaru</h2><div class="table-wrap"><table id="dashBooking"></table></div></div>
+</section>
+<section id="departures" class="tab hidden">
+<div class="panel"><h2>Tambah Keberangkatan</h2><form id="depForm"><div class="grid3">
+<div class="field"><label>Nama Paket</label><input name="package" required placeholder="Tour 3 Negara Asia"></div>
+<div class="field"><label>Periode / Tanggal</label><input name="date" required placeholder="18–24 Nov 2026"></div>
+<div class="field"><label>Kode Departure</label><input name="code" placeholder="KN-3N-1811"></div>
+</div><div class="actions"><button>Tambah Keberangkatan</button></div></form></div>
+<div class="panel"><h2>Daftar Keberangkatan</h2><div class="table-wrap"><table id="depTable"></table></div></div>
+</section>
+<section id="bookings" class="tab hidden">
+<div class="panel"><h2>Input Booking</h2><form id="bookingForm">
+<div class="grid3">
+<div class="field"><label>Keberangkatan</label><select name="departureId" id="bookingDep" required></select></div>
+<div class="field"><label>Travel Agent</label><select name="agentId" id="bookingAgent" required></select></div>
+<div class="field"><label>Kode Booking</label><input name="code" placeholder="Otomatis jika kosong"></div>
+<div class="field"><label>Harga Paket / Pax</label><input name="price" type="number" min="0" required></div>
+<div class="field"><label>Tips / Pax</label><input name="tips" type="number" min="0" value="0"></div>
+<div class="field"><label>Agent Discount (total)</label><input name="discount" type="number" min="0" value="0"></div>
+<div class="field"><label>DP</label><input name="dp" type="number" min="0" value="0"></div>
+<div class="field"><label>Catatan</label><input name="notes" placeholder="Land only, special request..."></div>
+<div class="field"><label>Jumlah Pax</label><input name="pax" type="number" min="1" value="1" required></div>
+</div><div class="actions"><button>Simpan Booking</button></div></form></div>
+<div class="panel"><h2>Daftar Booking</h2><div class="table-wrap"><table id="bookingTable"></table></div></div>
+</section>
+<section id="agents" class="tab hidden">
+<div class="panel"><h2>Tambah Agent</h2><form id="agentForm"><div class="grid3">
+<div class="field"><label>Nama Agent / Perusahaan</label><input name="name" required></div><div class="field"><label>Kontak</label><input name="phone"></div><div class="field"><label>Email</label><input name="email" type="email"></div>
+</div><div class="actions"><button>Tambah Agent</button></div></form></div>
+<div class="panel"><h2>Database Agent</h2><div class="table-wrap"><table id="agentTable"></table></div></div>
+</section>
+<section id="participants" class="tab hidden">
+<div class="panel"><h2>Tambah Peserta</h2><form id="participantForm"><div class="grid3">
+<div class="field"><label>Booking</label><select name="bookingId" id="participantBooking" required></select></div><div class="field"><label>Nama sesuai passport</label><input name="name" required></div><div class="field"><label>Passport Number</label><input name="passport"></div>
+<div class="field"><label>Nationality</label><input name="nationality" value="INDONESIA"></div><div class="field"><label>Tanggal lahir</label><input name="dob" type="date"></div><div class="field"><label>Passport Expiry</label><input name="expiry" type="date"></div>
+<div class="field"><label>Jenis Kelamin</label><select name="gender"><option value="">-</option><option>Male</option><option>Female</option></select></div><div class="field"><label>Flight / PNR</label><input name="flight"></div><div class="field"><label>Bagasi</label><input name="baggage"></div>
+</div><div class="actions"><button>Simpan Peserta</button></div></form></div>
+<div class="panel"><h2>Data Peserta</h2><div class="toolbar"><input id="participantSearch" placeholder="Cari nama / passport..."></div><div class="table-wrap"><table id="participantTable"></table></div></div>
+</section>
+<section id="rooming" class="tab hidden">
+<div class="panel"><h2>Atur Rooming</h2><p class="small">Pilih peserta, lalu isi nama / nomor kamar dan jenis kamar. Data rooming dapat di-export di menu Rekap & Export.</p><form id="roomForm"><div class="grid3">
+<div class="field"><label>Peserta</label><select name="participantId" id="roomParticipant" required></select></div><div class="field"><label>Room Number / Group</label><input name="room" required placeholder="Room 01"></div><div class="field"><label>Tipe Kamar</label><select name="type"><option>Twin</option><option>Double</option><option>Triple</option><option>Single</option><option>Family</option></select></div>
+</div><div class="actions"><button>Simpan Room</button></div></form></div><div class="panel"><h2>Rooming List</h2><div class="table-wrap"><table id="roomTable"></table></div></div>
+</section>
+<section id="reports" class="tab hidden">
+<div class="panel"><h2>Rekap & Export Keberangkatan</h2><div class="field"><label>Pilih keberangkatan</label><select id="reportDep"></select></div><div id="reportSummary"></div><div class="actions">
+<button id="exportPassport">Export Passport List CSV</button><button id="exportCombined" class="secondary">Export Passport + Room List CSV</button><button id="exportRoom" class="gold">Export Rooming List CSV</button><button id="exportBookings" class="secondary">Export Rekap Booking CSV</button><button id="exportPayments" class="secondary">Export Pembayaran CSV</button>
+</div></div><div class="panel"><h2>Peserta pada keberangkatan terpilih</h2><div class="table-wrap"><table id="reportTable"></table></div></div></section>
+<section id="payments" class="tab hidden">
+<div class="panel"><h2>Catat Pembayaran</h2><form id="paymentForm"><div class="grid3">
+<div class="field"><label>Booking</label><select name="bookingId" id="paymentBooking" required></select></div>
+<div class="field"><label>Tanggal</label><input name="date" type="date" required></div>
+<div class="field"><label>Jumlah pembayaran</label><input name="amount" type="number" min="1" required></div>
+<div class="field"><label>Metode</label><select name="method"><option>Transfer</option><option>Tunai</option><option>Debit</option><option>Lainnya</option></select></div>
+<div class="field"><label>Referensi / catatan</label><input name="reference" placeholder="Bank, bukti, keterangan"></div>
+</div><div class="actions"><button>Simpan Pembayaran</button></div></form></div>
+<div class="panel"><h2>Histori Pembayaran</h2><div class="table-wrap"><table id="paymentTable"></table></div></div>
+</section>
+<section id="settings" class="tab hidden">
+<div class="panel"><h2>Pengaturan Invoice</h2><form id="settingsForm"><div class="grid3">
+<div class="field"><label>Nama Perusahaan</label><input name="company"></div><div class="field"><label>Tagline</label><input name="tagline"></div><div class="field"><label>Prefix Invoice</label><input name="prefix"></div>
+<div class="field"><label>Alamat</label><input name="address"></div><div class="field"><label>Telepon</label><input name="phone"></div><div class="field"><label>Email / Website</label><input name="email"></div>
+<div class="field"><label>Rekening</label><textarea name="banks"></textarea></div><div class="field"><label>Catatan Invoice</label><textarea name="notes"></textarea></div>
+</div><div class="actions"><button>Simpan Pengaturan</button><button type="button" class="secondary" id="backup">Backup JSON</button><button type="button" class="danger" id="reset">Reset Semua Data</button></div></form></div>
+<div class="panel"><h2>Invoice preview / print</h2><p class="small">Invoice dihasilkan dari booking. Buka daftar booking lalu klik Invoice.</p></div>
+</section>
+<footer>KN Booking System · Prototype v2 · Data tersimpan pada browser yang digunakan</footer>
+</main>
+<script>
+const KEY='kn-booking-v1';
+const empty={departures:[],agents:[],bookings:[],participants:[],rooms:[],payments:[],settings:{company:'Konsorsium Nasional',tagline:'Travel partner with heart',prefix:'INV.KSN-',address:'',phone:'',email:'',banks:'',notes:'Pembayaran transfer melalui rekening di atas. DP dan pelunasan tidak dapat di-refund.'},invoiceCounter:10001};
+let db=load(); if(!db.payments)db.payments=[];
+function load(){try{return JSON.parse(localStorage.getItem(KEY))||structuredClone(empty)}catch{return structuredClone(empty)}}
+function save(){localStorage.setItem(KEY,JSON.stringify(db));render()}
+function id(){return Math.random().toString(36).slice(2,10)}
+function money(n){return new Intl.NumberFormat('id-ID').format(Number(n||0))}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function depName(id){let d=db.departures.find(x=>x.id===id);return d?d.package+' · '+d.date:'-'}
+function agentName(id){return db.agents.find(x=>x.id===id)?.name||'-'}
+function paidTotal(b){return (db.payments||[]).filter(p=>p.bookingId===b.id).reduce((s,p)=>s+Number(p.amount||0),0)+Number(b.dp||0)}
+function bookingName(id){let b=db.bookings.find(x=>x.id===id);return b?b.code+' · '+agentName(b.agentId):'-'}
+function header(cols){return '<thead><tr>'+cols.map(c=>'<th>'+c+'</th>').join('')+'</tr></thead>'}
+function nav(){document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tab').forEach(x=>x.classList.add('hidden'));document.getElementById(b.dataset.tab).classList.remove('hidden')})}
+function render(){
+const pax=db.participants.length,total=db.bookings.reduce((s,b)=>s+(b.price*b.pax+b.tips*b.pax-b.discount),0),out=db.bookings.reduce((s,b)=>s+(b.price*b.pax+b.tips*b.pax-b.discount-b.dp),0);
+document.getElementById('stats').innerHTML=[['Keberangkatan',db.departures.length],['Booking',db.bookings.length],['Total Peserta',pax],['Nilai Booking', 'Rp '+money(total)],['Outstanding','Rp '+money(out)]].map(x=>`<div class="stat"><label>${x[0]}</label><strong>${x[1]}</strong></div>`).join('');
+let upcoming=db.departures.slice().sort((a,b)=>a.date.localeCompare(b.date));document.getElementById('dashDep').innerHTML=header(['Paket','Periode','Pax','Booking'])+'<tbody>'+upcoming.slice(0,8).map(d=>`<tr><td>${esc(d.package)}</td><td>${esc(d.date)}</td><td>${db.participants.filter(p=>db.bookings.find(b=>b.id===p.bookingId)?.departureId===d.id).length}</td><td>${db.bookings.filter(b=>b.departureId===d.id).length}</td></tr>`).join('')+'</tbody>';
+document.getElementById('dashBooking').innerHTML=header(['Kode','Departure','Agent','Pax','Nilai','DP','Sisa'])+'<tbody>'+db.bookings.slice(-8).reverse().map(b=>`<tr><td>${esc(b.code)}</td><td>${esc(depName(b.departureId))}</td><td>${esc(agentName(b.agentId))}</td><td>${b.pax}</td><td>Rp ${money(b.price*b.pax+b.tips*b.pax-b.discount)}</td><td>Rp ${money(b.dp)}</td><td>Rp ${money(b.price*b.pax+b.tips*b.pax-b.discount-b.dp)}</td></tr>`).join('')+'</tbody>';
+document.getElementById('depTable').innerHTML=header(['Kode','Paket','Periode','Pax','Booking','Aksi'])+'<tbody>'+db.departures.map(d=>`<tr><td>${esc(d.code)}</td><td>${esc(d.package)}</td><td>${esc(d.date)}</td><td>${db.participants.filter(p=>db.bookings.find(b=>b.id===p.bookingId)?.departureId===d.id).length}</td><td>${db.bookings.filter(b=>b.departureId===d.id).length}</td><td><button class="danger" onclick="delDep('${d.id}')">Hapus</button></td></tr>`).join('')+'</tbody>';
+document.getElementById('bookingTable').innerHTML=header(['Kode','Departure','Agent','Pax','Harga/Pax','Tips','Diskon','DP','Sisa','Aksi'])+'<tbody>'+db.bookings.map(b=>`<tr><td>${esc(b.code)}</td><td>${esc(depName(b.departureId))}</td><td>${esc(agentName(b.agentId))}</td><td>${b.pax}</td><td>${money(b.price)}</td><td>${money(b.tips)}</td><td>${money(b.discount)}</td><td>${money(b.dp)}</td><td>${money(b.price*b.pax+b.tips*b.pax-b.discount-b.dp)}</td><td><button onclick="invoice('${b.id}')">Invoice</button> <button class="danger" onclick="delBooking('${b.id}')">Hapus</button></td></tr>`).join('')+'</tbody>';
+document.getElementById('agentTable').innerHTML=header(['Nama','Kontak','Email','Booking','Aksi'])+'<tbody>'+db.agents.map(a=>`<tr><td>${esc(a.name)}</td><td>${esc(a.phone)}</td><td>${esc(a.email)}</td><td>${db.bookings.filter(b=>b.agentId===a.id).length}</td><td><button class="danger" onclick="delAgent('${a.id}')">Hapus</button></td></tr>`).join('')+'</tbody>';
+document.getElementById('participantTable').innerHTML=header(['Booking','Nama','Passport','Nationality','DOB','Expiry','Gender','Flight','Bagasi','Aksi'])+'<tbody>'+db.participants.map(p=>`<tr><td>${esc(bookingName(p.bookingId))}</td><td>${esc(p.name)}</td><td>${esc(p.passport)}</td><td>${esc(p.nationality)}</td><td>${esc(p.dob)}</td><td>${esc(p.expiry)}</td><td>${esc(p.gender)}</td><td>${esc(p.flight)}</td><td>${esc(p.baggage)}</td><td><button class="danger" onclick="delParticipant('${p.id}')">Hapus</button></td></tr>`).join('')+'</tbody>';
+document.getElementById('roomTable').innerHTML=header(['Departure','Booking','Peserta','Room','Tipe','Aksi'])+'<tbody>'+db.rooms.map(r=>{let p=db.participants.find(p=>p.id===r.participantId);return `<tr><td>${esc(depName(db.bookings.find(b=>b.id===p?.bookingId)?.departureId))}</td><td>${esc(bookingName(p?.bookingId))}</td><td>${esc(p?.name)}</td><td>${esc(r.room)}</td><td>${esc(r.type)}</td><td><button class="danger" onclick="delRoom('${r.id}')">Hapus</button></td></tr>`}).join('')+'</tbody>';
+fillSelect('bookingDep',db.departures.map(d=>[d.id,d.package+' · '+d.date]));fillSelect('bookingAgent',db.agents.map(a=>[a.id,a.name]));fillSelect('participantBooking',db.bookings.map(b=>[b.id,bookingName(b.id)]));fillSelect('roomParticipant',db.participants.map(p=>[p.id,p.name+' · '+bookingName(p.bookingId)]));fillSelect('paymentBooking',db.bookings.map(b=>[b.id,bookingName(b.id)]));fillSelect('reportDep',db.departures.map(d=>[d.id,d.package+' · '+d.date]));
+document.getElementById('paymentTable').innerHTML=header(['Tanggal','Booking','Agent','Jumlah','Metode','Referensi','Aksi'])+'<tbody>'+db.payments.map(p=>{let b=db.bookings.find(x=>x.id===p.bookingId);return `<tr><td>${esc(p.date)}</td><td>${esc(b?.code)}</td><td>${esc(agentName(b?.agentId))}</td><td>Rp ${money(p.amount)}</td><td>${esc(p.method)}</td><td>${esc(p.reference)}</td><td><button class="danger" onclick="delPayment('${p.id}')">Hapus</button></td></tr>`}).join('')+'</tbody>';
+if(db.departures.length&&!document.getElementById('reportDep').value)document.getElementById('reportDep').value=db.departures[0].id;report();
+let sf=document.getElementById('settingsForm');Object.entries(db.settings).forEach(([k,v])=>{if(sf.elements[k])sf.elements[k].value=v});
+}
+function fillSelect(id,opts){let s=document.getElementById(id),old=s.value;s.innerHTML='<option value="">-- Pilih --</option>'+opts.map(([v,t])=>`<option value="${esc(v)}">${esc(t)}</option>`).join('');if(opts.some(x=>x[0]===old))s.value=old}
+function report(){let id=document.getElementById('reportDep').value;let bs=db.bookings.filter(b=>b.departureId===id),ps=db.participants.filter(p=>bs.some(b=>b.id===p.bookingId));let total=bs.reduce((s,b)=>s+b.price*b.pax+b.tips*b.pax-b.discount,0),dp=bs.reduce((s,b)=>s+b.dp,0);
+document.getElementById('reportSummary').innerHTML=`<div class="cards" style="margin:14px 0"><div class="stat"><label>Booking</label><strong>${bs.length}</strong></div><div class="stat"><label>Total Pax</label><strong>${ps.length}</strong></div><div class="stat"><label>Total Bersih</label><strong>Rp ${money(total)}</strong></div><div class="stat"><label>Total DP</label><strong>Rp ${money(dp)}</strong></div><div class="stat"><label>Outstanding</label><strong>Rp ${money(total-dp)}</strong></div></div>`;
+document.getElementById('reportTable').innerHTML=header(['Booking','Nama','Passport','DOB','Expiry','Room','Tipe'])+'<tbody>'+ps.map(p=>{let r=db.rooms.find(r=>r.participantId===p.id);return `<tr><td>${esc(bookingName(p.bookingId))}</td><td>${esc(p.name)}</td><td>${esc(p.passport)}</td><td>${esc(p.dob)}</td><td>${esc(p.expiry)}</td><td>${esc(r?.room)}</td><td>${esc(r?.type)}</td></tr>`}).join('')+'</tbody>';
+}
+function delDep(id){if(confirm('Hapus keberangkatan? Booking terkait tidak otomatis terhapus.')){db.departures=db.departures.filter(x=>x.id!==id);save()}}
+function delBooking(id){if(confirm('Hapus booking dan peserta terkait?')){db.bookings=db.bookings.filter(x=>x.id!==id);db.participants=db.participants.filter(p=>p.bookingId!==id);db.rooms=db.rooms.filter(r=>db.participants.some(p=>p.id===r.participantId));save()}}
+function delAgent(id){if(confirm('Hapus agent?')){db.agents=db.agents.filter(x=>x.id!==id);save()}}
+function delParticipant(id){if(confirm('Hapus peserta?')){db.participants=db.participants.filter(x=>x.id!==id);db.rooms=db.rooms.filter(r=>r.participantId!==id);save()}}
+function delRoom(id){db.rooms=db.rooms.filter(x=>x.id!==id);save()}
+function delPayment(id){if(confirm('Hapus transaksi pembayaran?')){db.payments=db.payments.filter(x=>x.id!==id);save()}}
+document.getElementById('depForm').onsubmit=e=>{e.preventDefault();let f=new FormData(e.target);db.departures.push({id:id(),package:f.get('package'),date:f.get('date'),code:f.get('code')||'KN-'+id().toUpperCase()});e.target.reset();save()};
+document.getElementById('agentForm').onsubmit=e=>{e.preventDefault();let f=new FormData(e.target);db.agents.push({id:id(),name:f.get('name'),phone:f.get('phone'),email:f.get('email')});e.target.reset();save()};
+document.getElementById('bookingForm').onsubmit=e=>{e.preventDefault();let f=new FormData(e.target);let code=f.get('code')||'BK-'+id().toUpperCase();db.bookings.push({id:id(),code,departureId:f.get('departureId'),agentId:f.get('agentId'),price:+f.get('price'),tips:+f.get('tips'),discount:+f.get('discount'),dp:+f.get('dp'),pax:+f.get('pax'),notes:f.get('notes')});e.target.reset();save()};
+document.getElementById('paymentForm').onsubmit=e=>{e.preventDefault();let f=new FormData(e.target);let b=db.bookings.find(x=>x.id===f.get('bookingId'));if(!b)return;let net=b.price*b.pax+b.tips*b.pax-b.discount;let paid=paidTotal(b);if(+f.get('amount')+paid>net){if(!confirm('Pembayaran ini akan melebihi nilai bersih booking. Tetap simpan?'))return}db.payments.push({id:id(),bookingId:f.get('bookingId'),date:f.get('date'),amount:+f.get('amount'),method:f.get('method'),reference:f.get('reference')});e.target.reset();save()};
+document.getElementById('participantForm').onsubmit=e=>{e.preventDefault();let f=new FormData(e.target);db.participants.push({id:id(),bookingId:f.get('bookingId'),name:f.get('name'),passport:f.get('passport'),nationality:f.get('nationality'),dob:f.get('dob'),expiry:f.get('expiry'),gender:f.get('gender'),flight:f.get('flight'),baggage:f.get('baggage')});e.target.reset();save()};
+document.getElementById('roomForm').onsubmit=e=>{e.preventDefault();let f=new FormData(e.target);db.rooms.push({id:id(),participantId:f.get('participantId'),room:f.get('room'),type:f.get('type')});e.target.reset();save()};
+document.getElementById('reportDep').onchange=report;
+function invoice(id){let b=db.bookings.find(x=>x.id===id),a=db.agents.find(x=>x.id===b.agentId),d=db.departures.find(x=>x.id===b.departureId),ps=db.participants.filter(x=>x.bookingId===id);let subtotal=b.price*b.pax+b.tips*b.pax,net=subtotal-b.discount,remaining=net-b.dp;let inv=db.settings.prefix+(db.invoiceCounter++);save();let win=window.open('','_blank');if(!win){alert('Izinkan popup browser untuk membuka invoice.');return}win.document.write(`<html><head><title>${inv}</title><style>body{font:13px Arial;padding:24px;color:#222}h1{text-align:right}table{width:100%;border-collapse:collapse;margin:20px 0}th,td{border:1px solid #aaa;padding:8px}th{background:#eee}.right{text-align:right}.red{color:#c22;font-weight:bold}.foot{margin-top:28px}@media print{button{display:none}} 
+body{background:#f6f8fb;color:#26354b}
+header{height:82px;background:#fff;color:#243b63;border-bottom:1px solid #edf0f5;padding:14px 28px;position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 10px #142b4906}
+.top-brand{display:flex;align-items:center;gap:12px}.top-brand h1{font-size:14px;letter-spacing:.3px;color:#2448b7;margin:0}.top-brand h1 span{color:#f39a27}.top-brand small{color:#8795aa;font-size:10px}
+.logo{width:42px;height:42px;border-radius:12px;background:#2448b7;color:white;display:grid;place-items:center;font-weight:900}
+.top-actions{display:flex;align-items:center;gap:12px}.top-search{border-radius:24px;background:#f5f7fa;padding:9px 13px;color:#91a0b5;display:flex;gap:8px;align-items:center;width:min(300px,30vw)}.top-search input{border:0;background:transparent;padding:0;outline:0}.icon-btn{background:#f6f8fb;color:#6e819e;border-radius:50%;width:38px;height:38px;padding:0;font-size:18px}.user-chip{display:flex;align-items:center;gap:10px;color:#34425a;font-size:11px}.user-chip small{display:block;color:#f28b27;font-size:9px;text-align:right;letter-spacing:1px}.avatar{width:40px;height:40px;border-radius:50%;background:#2448b7;color:white;display:grid;place-items:center;font-size:17px}
+main{max-width:none;margin:0;padding:0 0 0 230px;min-height:calc(100vh - 82px)}
+.nav{position:fixed;top:82px;left:0;bottom:0;width:230px;background:#fff;border-right:1px solid #edf0f5;padding:24px 16px;display:flex;flex-direction:column;gap:7px;z-index:9;overflow:auto}
+.nav button{width:100%;text-align:left;display:flex;align-items:center;gap:12px;padding:13px 16px;border-radius:28px;background:white;color:#71829d;border:0;font-size:11px;letter-spacing:.5px;font-weight:750;transition:.15s}
+.nav button:before{content:'◈';font-size:15px;color:#9aaec9}.nav button.active{background:#2448b7;color:white;box-shadow:0 5px 12px #2448b733}.nav button.active:before{color:white}
+.tab{padding:30px 32px;min-height:calc(100vh - 82px)}.tab.hidden{display:none!important}
+.panel{border:1px solid #edf0f5;border-radius:18px;box-shadow:0 4px 18px #152b4905;padding:22px}
+.stat{border:1px solid #eef1f5;border-radius:22px;padding:22px;box-shadow:0 4px 16px #142b4905}.stat strong{color:#2448b7}
+button{border-radius:10px}.nav button{border-radius:28px}
+footer{padding:15px 30px;margin-left:230px;font-size:10px;text-transform:uppercase;letter-spacing:1px}
+#dashboard:before{content:'⌂  DASHBOARD';display:block;color:#2448b7;font-size:10px;font-weight:800;letter-spacing:1px;margin:0 0 12px}
+#dashboard h2{font-size:22px}
+@media(max-width:900px){main{padding-left:0}.nav{position:relative;top:auto;left:auto;bottom:auto;width:auto;display:flex;flex-direction:row;overflow-x:auto;padding:10px}.nav button{white-space:nowrap;width:auto}.tab{padding:18px}.top-search{display:none}footer{margin-left:0}}
+</style></head><body><h1>INVOICE</h1><h3>${esc(d?.package||'TOUR')}</h3><p><b>No Invoice:</b> ${inv}<br><b>Kode Booking:</b> ${b.code}</p><p><b>To:</b> ${esc(a?.name||'')}</p><p>Dengan adanya pemesanan ${esc(d?.package||'')} ini, berikut kami buat kwitansi pembayaran sebagai berikut:</p><table><tr><th>Peserta</th><th>Nama Tamu</th><th>Periode</th><th>Deskripsi</th><th>Harga</th><th>Unit</th><th>Total</th></tr>${ps.map((p,i)=>`<tr><td>${i+1}</td><td>${esc(p.name)}</td><td>${esc(d?.date)}</td><td>${esc(b.notes||d?.package)}</td><td>${money(b.price)}</td><td>1</td><td>${money(b.price)}</td></tr>`).join('')}<tr><td colspan="4">Tips (non pajak)</td><td>${money(b.tips)}</td><td>${b.pax}</td><td>${money(b.tips*b.pax)}</td></tr><tr><td colspan="6" class="right">Total Pembayaran</td><td>${money(subtotal)}</td></tr><tr><td colspan="6" class="right">Agent Discount</td><td>${money(b.discount)}</td></tr><tr><td colspan="6" class="right red">Total Bersih</td><td class="red">${money(net)}</td></tr><tr><td colspan="6" class="right">Total Pembayaran</td><td>${money(paid)}</td></tr><tr><td colspan="6" class="right red">Sisa Pembayaran</td><td class="red">${money(remaining)}</td></tr></table><div class="foot"><b>${esc(db.settings.company)}</b><br>${esc(db.settings.address)}<br>${esc(db.settings.phone)}<br>${esc(db.settings.email)}<br><br><b>Rekening:</b><br>${esc(db.settings.banks).replace(/\n/g,'<br>')}<br><br><b>Notes:</b><br>${esc(db.settings.notes).replace(/\n/g,'<br>')}<p style="text-align:right">Yang Menyerahkan &nbsp;&nbsp;&nbsp;&nbsp; Yang Menerima</p></div><button onclick="window.print()">Print / Save PDF</button></body></html>`);win.document.close()}
+function csv(rows,filename){let data=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');let blob=new Blob(['\ufeff'+data],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url)}
+function selectedParticipants(){let id=document.getElementById('reportDep').value;let bookings=db.bookings.filter(b=>b.departureId===id);return db.participants.filter(p=>bookings.some(b=>b.id===p.bookingId))}
+document.getElementById('exportPassport').onclick=()=>{let ps=selectedParticipants();csv([['Booking','Agent','Nama','Passport','Nationality','DOB','Expiry','Gender','Flight','Baggage'],...ps.map(p=>{let b=db.bookings.find(b=>b.id===p.bookingId);return [b.code,agentName(b.agentId),p.name,p.passport,p.nationality,p.dob,p.expiry,p.gender,p.flight,p.baggage]})],'passport-list.csv')};
+document.getElementById('exportCombined').onclick=()=>{let ps=selectedParticipants();csv([['Booking','Agent','Nama','Passport','Nationality','DOB','Expiry','Gender','Flight','Baggage','Room','Room Type'],...ps.map(p=>{let b=db.bookings.find(b=>b.id===p.bookingId),r=db.rooms.find(r=>r.participantId===p.id);return [b.code,agentName(b.agentId),p.name,p.passport,p.nationality,p.dob,p.expiry,p.gender,p.flight,p.baggage,r?.room,r?.type]})],'passport-room-list.csv')};
+document.getElementById('exportRoom').onclick=()=>{let ps=selectedParticipants();csv([['Departure','Booking','Agent','Nama','Room','Room Type'],...ps.map(p=>{let b=db.bookings.find(b=>b.id===p.bookingId),r=db.rooms.find(r=>r.participantId===p.id);return [depName(b.departureId),b.code,agentName(b.agentId),p.name,r?.room,r?.type]})],'rooming-list.csv')};
+document.getElementById('exportPayments').onclick=()=>{let id=document.getElementById('reportDep').value,bs=db.bookings.filter(b=>b.departureId===id),ps=db.payments.filter(p=>bs.some(b=>b.id===p.bookingId));csv([['Tanggal','Booking','Agent','Jumlah','Metode','Referensi'],...ps.map(p=>{let b=db.bookings.find(b=>b.id===p.bookingId);return [p.date,b.code,agentName(b.agentId),p.amount,p.method,p.reference]})],'payment-history.csv')};
+document.getElementById('exportBookings').onclick=()=>{let bs=db.bookings.filter(b=>b.departureId===document.getElementById('reportDep').value);csv([['Booking','Agent','Paket','Periode','Pax','Price/Pax','Tips/Pax','Discount','DP','Net','Outstanding'],...bs.map(b=>[b.code,agentName(b.agentId),depName(b.departureId),db.departures.find(d=>d.id===b.departureId)?.date,b.pax,b.price,b.tips,b.discount,paidTotal(b),b.price*b.pax+b.tips*b.pax-b.discount,b.price*b.pax+b.tips*b.pax-b.discount-paidTotal(b)])],'booking-recap.csv')};
+document.getElementById('settingsForm').onsubmit=e=>{e.preventDefault();let f=new FormData(e.target);db.settings={company:f.get('company'),tagline:f.get('tagline'),prefix:f.get('prefix'),address:f.get('address'),phone:f.get('phone'),email:f.get('email'),banks:f.get('banks'),notes:f.get('notes')};save();alert('Pengaturan tersimpan')};
+document.getElementById('backup').onclick=()=>{let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='KN-booking-backup.json';a.click();URL.revokeObjectURL(url)};
+document.getElementById('reset').onclick=()=>{if(confirm('PERINGATAN: seluruh data browser akan dihapus. Lanjut?')){db=structuredClone(empty);save()}};
+document.getElementById('participantSearch').oninput=e=>{let q=e.target.value.toLowerCase();document.querySelectorAll('#participantTable tbody tr').forEach(r=>r.style.display=r.textContent.toLowerCase().includes(q)?'':'none')};
+nav();render();setInterval(()=>document.getElementById('clock').textContent=new Date().toLocaleString('id-ID'),1000);
+</script>
+</body>
+</html>
