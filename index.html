@@ -339,7 +339,7 @@ const ICON={
 const NAV=[['dashboard','Dashboard'],['booking','Booking & Invoice'],['rekap','Rekap Keberangkatan'],['pelanggan','Pelanggan'],['katalog','Katalog Layanan'],['laporan','Laporan'],['pengguna','Pengguna'],['pengaturan','Pengaturan']];
 
 /* ============ Perhitungan ============ */
-const isChn=b=>b.taxFmt==='row';
+const isChn=b=>b.taxFmt==='row'||(b.taxFmt==='auto'&&num(b.taxPct)>0);
 const discLabel=(b,agent)=>b.discMode==='after'?'Agen Komisi':(agent?'Agent Discount':'Diskon');
 const pctS=v=>String(num(v)).replace('.',',');
 function calc(b){
@@ -769,7 +769,7 @@ const blankFl=()=>({out:'',outRoute:'',in:'',inRoute:'',pnr:'',bag:''});
 function newBooking(){
   const t=todayISO(),st=S.settings;
   return {customerId:'',newCust:{name:'',phone:'',email:''},status:'confirmed',tripType:'Internasional',departureId:'',destination:'',pkgNote:'',periodText:'',departDate:'',returnDate:'',sales:'',code:'',
-    pkgPrice:0,pkgCost:0,tipsPerPax:0,fl:blankFl(),
+    pkgPrice:0,pkgCost:0,tipsPerPax:0,discMode:'after',taxFmt:'auto',fl:blankFl(),
     passengers:[blankPax()],items:[],
     discount:0,adminFee:0,taxPct:num(st.taxPct),invoiceDate:t,dueDate:addDays(t,num(st.dueDays)||7),notes:'',dp:{amount:0,method:'Transfer Bank',date:t,ref:''}};
 }
@@ -845,7 +845,7 @@ function bookingBody(D,editing){
   +fld('Biaya admin / service (Rp)',inp('adminFee',nz(D.adminFee),{type:'number',min:0,ph:'0'}))+fld('Pajak (%)',inp('taxPct',nz(D.taxPct),{type:'number',min:0,step:'0.1',ph:'0'}))
   +fld('Potongan agen',sel('discMode',D.discMode||'before',[['before','Agent discount: mengurangi dasar pajak'],['after','Agen komisi: dipotong setelah pajak']]))
   +fld('Tips ikut dasar pajak?',sel('tipsTaxable',String(D.tipsTaxable)==='1'?'1':'0',[['0','Tidak (tips non pajak)'],['1','Ya, tips ikut dikenai pajak']]))
-  +fld('Format invoice',sel('taxFmt',D.taxFmt||'std',[['std','Standar (Total Bersih)'],['row','Program China (pajak sebagai baris, Pelunasan)']]),'span2')
+  +fld('Format invoice',sel('taxFmt',D.taxFmt||'std',[['auto','Otomatis (pajak sebagai baris bila ada pajak)'],['std','Standar (Total Bersih)'],['row','Program China (pajak sebagai baris, Pelunasan)']]),'span2')
   +fld('Tanggal invoice',inp('invoiceDate',D.invoiceDate,{type:'date'}))+fld('Pelunasan paling lambat',inp('dueDate',D.dueDate,{type:'date'}))
   +fld('Catatan tambahan di invoice',txa('notes',D.notes,2),'full')
   +'</div></fieldset>'
@@ -870,11 +870,9 @@ function updateSummary(){
   el.innerHTML='<div><span class="mut">Peserta ('+n+' orang)</span><span class="num">'+rp(c.paxTotal)+'</span></div>'
   +(c.itemsTotal?'<div><span class="mut">Biaya tambahan</span><span class="num">'+rp(c.itemsTotal)+'</span></div>':'')
   +(c.tips?'<div><span class="mut">Tips (non pajak)</span><span class="num">'+rp(c.tips)+'</span></div>':'')
-  +'<div><span class="mut">Total pembayaran</span><span class="num">'+rp(c.gross)+'</span></div>'
-  +(c.discount?'<div><span class="mut">'+discLabel(D,true)+'</span><span class="num">-'+rp(c.discount)+'</span></div>':'')
-  +(c.tax?'<div><span class="mut">Pajak '+pctS(D.taxPct)+'%</span><span class="num">'+rp(c.tax)+'</span></div>':'')
-  +(c.admin?'<div><span class="mut">Biaya admin</span><span class="num">'+rp(c.admin)+'</span></div>':'')
-  +'<div class="tot"><span>Total bersih</span><span class="num">'+rp(c.total)+'</span></div>'
+  +(isChn(D)?(c.tax?'<div><span class="mut">Pajak '+pctS(D.taxPct)+'%</span><span class="num">'+rp(c.tax)+'</span></div>':'')+(c.admin?'<div><span class="mut">Biaya admin</span><span class="num">'+rp(c.admin)+'</span></div>':'')+'<div><span class="mut">Total pembayaran</span><span class="num">'+rp(c.total+c.discount)+'</span></div>'+(c.discount?'<div><span class="mut">'+discLabel(D,true)+'</span><span class="num">-'+rp(c.discount)+'</span></div>':'')
+  :'<div><span class="mut">Total pembayaran</span><span class="num">'+rp(c.gross)+'</span></div>'+(c.discount?'<div><span class="mut">'+discLabel(D,true)+'</span><span class="num">-'+rp(c.discount)+'</span></div>':'')+(c.tax?'<div><span class="mut">Pajak '+pctS(D.taxPct)+'%</span><span class="num">'+rp(c.tax)+'</span></div>':'')+(c.admin?'<div><span class="mut">Biaya admin</span><span class="num">'+rp(c.admin)+'</span></div>':''))
+  +'<div class="tot"><span>'+(isChn(D)?'Pelunasan':'Total bersih')+'</span><span class="num">'+rp(c.total)+'</span></div>'
   +(dp>0?'<div><span class="mut">DP dicatat</span><span class="num">'+rp(dp)+'</span></div><div><span class="mut">Sisa pembayaran</span><span class="num">'+rp(c.total-dp)+'</span></div>':'')
   +'<div><span class="mut small">Estimasi margin</span><span class="num small">'+rp(c.margin)+'</span></div>';
 }
