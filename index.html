@@ -193,6 +193,9 @@ table.t td.num{white-space:nowrap}
 <div id="toast" hidden></div>
 <input type="file" id="restoreFile" accept=".json,application/json" hidden>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="sinkron.js"></script>
 <script>
 /* ============ Util ============ */
 const $=(s,r=document)=>r.querySelector(s);
@@ -628,7 +631,7 @@ function overdueCount(){return bookingsArr().filter(x=>x.b.status!=='cancelled'&
 function shell(inner){
   const st=S.settings,od=overdueCount();
   const nav=NAV.filter(n=>navOK(n[0])).map(([k,l])=>'<button data-act="nav" data-r="'+k+'"'+(ui.route===k?' aria-current="page"':'')+'><svg viewBox="0 0 24 24" aria-hidden="true">'+ICON[k]+'</svg>'+esc(l)+(k==='booking'&&od?'<span class="cnt" title="Invoice jatuh tempo">'+od+'</span>':'')+'</button>').join('');
-  const note=S.mode==='db'?'Data tersimpan di artifact ini dan terbuka dari perangkat mana pun yang punya akses.':'Mode lokal: data hanya tersimpan di browser ini. Buka lewat tautan artifact yang sudah dipublikasikan agar data tersimpan di cloud.';
+  const note=S.mode==='db'?'Data tersimpan di cloud dan tersinkron antar pengguna secara langsung.':'Mode lokal: data hanya tersimpan di browser ini. Buka lewat tautan artifact yang sudah dipublikasikan agar data tersimpan di cloud.';
   return '<aside class="side"><div class="brand">'+(st.logo?'<div class="logochip"><img src="'+esc(st.logo)+'" alt="'+esc(st.name)+'"></div>':'<div class="mark">'+esc((st.name||'T').charAt(0).toUpperCase())+'</div><div><b>'+esc(st.name)+'</b><small>'+esc(st.tagline)+'</small></div>')+'</div><nav class="nav" aria-label="Menu utama">'+nav+'</nav>'+userChip()+'<div class="sidenote">'+note+'</div></aside><main class="main">'+inner+'</main>';
 }
 function render(force){
