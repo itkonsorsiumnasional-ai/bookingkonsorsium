@@ -180,6 +180,7 @@ table.t.rk tr.tlrow td{background:var(--warn-soft)}
 .linkbtn{background:none;border:0;padding:0;color:var(--blue);font-weight:600;cursor:pointer;text-align:left}
 .linkbtn:hover{text-decoration:underline}
 .logoprev{max-height:70px;max-width:260px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px}
+table.t td.num{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -581,13 +582,17 @@ function buildXlsx(ids){
   });
   return wb.build();
 }
-function exportRekap(ids){
+function exportRekap(ids,expand){
+  if(expand===undefined)expand=true;
   ids=ids.filter(i=>S.departures[i]);
   if(!ids.length){toast('Pilih keberangkatan dulu');return}
-  ids.sort((a,b)=>(S.departures[a].departDate||'').localeCompare(S.departures[b].departDate||''));
-  const d0=S.departures[ids[0]];
-  const fn=ids.length===1?'Rekap-'+safeName(d0.name)+'-'+(d0.departDate||''):'Rekap-Keberangkatan-'+(d0.departDate||'')+'-'+ids.length+'-tour';
-  saveFile(fn+'.xlsx',buildXlsx(ids));
+  const set=new Set(ids);
+  if(expand)ids.forEach(i=>{if(groupOf(i)===i)depKids(i).forEach(([k])=>set.add(k))});
+  const roots=[...new Set([...set].map(groupOf))].sort((a,b)=>(S.departures[a].departDate||'').localeCompare(S.departures[b].departDate||''));
+  const ordered=[];roots.forEach(rt=>groupIds(rt).forEach(k=>{if(set.has(k))ordered.push(k)}));
+  const d0=S.departures[ordered[0]];
+  const fn=ordered.length===1?'Rekap-'+safeName(d0.name)+(durCode(d0.departDate,d0.returnDate)?'-'+durCode(d0.departDate,d0.returnDate):'')+'-'+(d0.departDate||''):'Rekap-Keberangkatan-'+(d0.departDate||'')+'-'+ordered.length+'-program';
+  saveFile(fn+'.xlsx',buildXlsx(ordered));
 }
 
 /* ============ Modal ============ */
@@ -779,6 +784,7 @@ function bookingBody(D,editing){
   +'<fieldset><legend>Paket dan keberangkatan</legend><div class="fgrid">'
   +fld('Keberangkatan (untuk rekap)',sel('departureId',D.departureId||'',[['','Belum dihubungkan']].concat(deps.map(([id,d])=>[id,d.name+(d.departDate?' · '+rangeShort(d.departDate,d.returnDate):'')])),{}).replace('<select','<select data-dep="1"'),'span2')
   +(cat.length?fld('Isi harga dari katalog',sel('__pk','',[['','Pilih paket dari katalog']].concat(cat.map(([id,c])=>[id,c.name+' ('+rp(c.price)+')'])),{}).replace('<select','<select data-pkgpick="1"').replace(' data-f="__pk"',''),'span2'):'')
+  +'<div class="full" id="qinfo"></div>'
   +fld('Nama paket (judul invoice)',inp('destination',D.destination,{ph:'Contoh: TOUR 3 NEGARA ASIA MALAYSIA – SINGAPORE – THAILAND 7H6M'}),'full')
   +fld('Keterangan paket',inp('pkgNote',D.pkgNote,{ph:'Contoh: Land Only'}))
   +fld('Jenis perjalanan',sel('tripType',D.tripType,TRIPS))
@@ -828,7 +834,19 @@ function bookingBody(D,editing){
   +(editing?'':'<fieldset><legend>Pembayaran awal / DP (opsional)</legend><div class="fgrid">'+fld('Jumlah DP (Rp)',inp('dp.amount',nz(D.dp.amount),{type:'number',min:0,ph:'0'}))+fld('Metode',sel('dp.method',D.dp.method,METHODS))+fld('Tanggal bayar',inp('dp.date',D.dp.date,{type:'date'}))+fld('No. referensi',inp('dp.ref',D.dp.ref))+'</div></fieldset>')
   +'<div class="card" style="background:var(--bg)"><div class="cb sumbox" id="bsum"></div></div>';
 }
+function updateQuota(){
+  const el=$('#qinfo');if(!el||!FORM)return;const D=FORM.D;
+  if(!D.departureId||!S.departures[D.departureId]){el.innerHTML='';return}
+  const q=quotaInfo(D.departureId);
+  if(!q.has){el.innerHTML='<div class="hint">Kuota keberangkatan ini belum diatur (Rekap Keberangkatan &gt; Atur kuota).</div>';return}
+  const old=D.id&&S.bookings[D.id]&&S.bookings[D.id].status!=='cancelled'&&groupOf(S.bookings[D.id].departureId||'')===q.root?paxOf(S.bookings[D.id]).length:0;
+  const mine=D.status==='cancelled'?0:paxOf(D).length;
+  const left=q.quota-(q.used-old)-mine,gn=S.departures[q.root].name;
+  el.innerHTML=left<0?'<div class="banner" style="background:var(--red-soft);color:var(--red)">Melebihi kuota '+esc(gn)+': kurang '+(-left)+' kursi ('+(q.used-old+mine)+' peserta dari kuota '+q.quota+'). Booking tetap bisa disimpan, tetapi tambah kuota atau kurangi peserta.</div>'
+    :'<div class="banner" style="'+(left===0?'':'background:var(--ok-soft);color:var(--ok)')+'">Kuota '+esc(gn)+(q.parts.length>1?' (dipakai bersama '+q.parts.length+' program)':'')+': sisa '+left+' kursi setelah booking ini ('+(q.used-old+mine)+' dari '+q.quota+' terisi).</div>';
+}
 function updateSummary(){
+  updateQuota();
   const el=$('#bsum');if(!el||!FORM)return;const D=FORM.D,c=calc(D),n=paxOf(D).length;
   const dp=D.dp?num(D.dp.amount):0;
   el.innerHTML='<div><span class="mut">Peserta ('+n+' orang)</span><span class="num">'+rp(c.paxTotal)+'</span></div>'
@@ -1083,13 +1101,40 @@ function depStats(id){
   const bs=depBookings(id),rows=depPax(id);
   return {n:rows.length,bk:bs.length,total:bs.reduce((a,x)=>a+x.c.total,0),paid:bs.reduce((a,x)=>a+x.c.paid,0),bal:bs.reduce((a,x)=>a+Math.max(0,x.c.balance),0)};
 }
+
+function depKids(id){return Object.entries(S.departures).filter(([k,d])=>d.parentId===id).sort((a,b)=>(a[1].returnDate||'').localeCompare(b[1].returnDate||'')||(a[1].name||'').localeCompare(b[1].name||''))}
+function groupOf(id){const d=S.departures[id];return d&&d.parentId&&S.departures[d.parentId]&&!S.departures[d.parentId].parentId?d.parentId:id}
+function groupIds(root){return [root].concat(depKids(root).map(x=>x[0]))}
+function quotaInfo(id){
+  const root=groupOf(id),ids=groupIds(root);
+  const parts=ids.map(k=>({id:k,name:S.departures[k].name,dur:durCode(S.departures[k].departDate,S.departures[k].returnDate),n:depPax(k).length}));
+  const used=parts.reduce((a,x)=>a+x.n,0),quota=num(S.departures[root].quota);
+  return {root,quota,used,left:quota-used,parts,has:quota>0};
+}
+const quotaPill=q=>q.left<0?pill('overdue','Lebih '+(-q.left)):q.left===0?pill('warn','Penuh'):pill('paid','Sisa '+q.left);
+function quotaCard(id){
+  const q=quotaInfo(id),root=S.departures[q.root],kid=q.root!==id;
+  const bar=q.has?'<div style="height:10px;border-radius:6px;background:var(--line);overflow:hidden;margin:8px 0 12px"><div style="height:100%;width:'+Math.min(100,Math.round(q.used/q.quota*100))+'%;background:'+(q.left<0?'var(--red)':q.left===0?'var(--warn)':'var(--blue)')+'"></div></div>':'';
+  return '<div class="card"><div class="ch"><h2>Kuota kursi'+(q.parts.length>1?' (dipakai bersama)':'')+'</h2>'+(kid?'':'<button class="btn sm" data-act="edit-dep" data-id="'+id+'">Atur kuota</button>')+'</div><div class="cb">'
+   +(kid?'<p class="small mut" style="margin:0 0 8px">Berbagi kuota dengan <button class="linkbtn" data-act="goto-dep" data-id="'+q.root+'">'+esc(root.name)+' &rarr;</button></p>':'')
+   +(q.has?'<div class="row" style="justify-content:space-between"><span class="strong num">'+q.used+' dari '+q.quota+' kursi terisi</span>'+quotaPill(q)+'</div>'+bar:'<p class="mut small" style="margin:0 0 8px">Kuota belum diatur. '+(kid?'Atur di keberangkatan induk.':'Klik "Atur kuota".')+'</p>')
+   +'<div class="stack small" style="gap:6px">'+q.parts.map(p=>'<div class="row" style="justify-content:space-between"><span>'+(p.id===id?'<b>':'')+esc(p.name)+(p.dur?' '+esc(p.dur):'')+(p.id===id?'</b>':'')+'</span><span class="num">'+p.n+' peserta</span></div>').join('')+'</div></div></div>';
+}
 const hex=h=>'#'+h;
 function vRekap(){
-  const arr=Object.entries(S.departures).sort((a,b)=>(a[1].departDate||'9').localeCompare(b[1].departDate||'9')||(a[1].name||'').localeCompare(b[1].name||''));
-  const nsel=arr.filter(([id])=>ui.sel[id]).length;
-  return '<div class="pagehead"><div><h1>Rekap Keberangkatan</h1><p>Daftar peserta, paspor, penerbangan, dan kamar per keberangkatan, siap diunduh sebagai Excel.</p></div><div class="row"><button class="btn" data-act="xlsx-sel"'+(nsel?'':' disabled')+'>Unduh Excel ('+nsel+' dipilih)</button><button class="btn primary" data-act="new-dep">+ Keberangkatan baru</button></div></div>'
-  +'<div class="card">'+(arr.length?'<div class="tablewrap"><table class="t"><thead><tr><th style="width:36px"></th><th>Keberangkatan</th><th>Periode</th><th class="r">Peserta</th><th class="r">Booking</th><th class="r">Total tagihan</th><th class="r">Sisa</th></tr></thead><tbody>'
-    +arr.map(([id,d])=>{const s=depStats(id);return '<tr class="click" data-act="open-dep" data-id="'+id+'"><td><input type="checkbox" data-act="sel-dep" data-id="'+id+'" aria-label="Pilih untuk unduh gabungan"'+(ui.sel[id]?' checked':'')+'></td><td><span class="strong">'+esc(d.name||'-')+'</span>'+(d.tl&&d.tl.name?'<div class="small mut">TL: '+esc(d.tl.name)+'</div>':'')+'</td><td>'+esc(rangeText(d.departDate,d.returnDate))+'<div class="small mut">'+esc(durCode(d.departDate,d.returnDate))+'</div></td><td class="r num">'+s.n+'</td><td class="r num">'+s.bk+'</td><td class="r num">'+rp(s.total)+'</td><td class="r num">'+(s.bal?'<span style="color:var(--red);font-weight:600">'+rp(s.bal)+'</span>':'-')+'</td></tr>'}).join('')+'</tbody></table></div><div class="cb hint">Centang beberapa keberangkatan lalu klik Unduh Excel untuk menggabungkannya dalam satu file (seperti rekap 3 Negara + 2 Negara).</div>'
+  const all=Object.entries(S.departures);
+  const roots=all.filter(([id])=>groupOf(id)===id).sort((a,b)=>(a[1].departDate||'9').localeCompare(b[1].departDate||'9')||(a[1].name||'').localeCompare(b[1].name||''));
+  const nsel=all.filter(([id])=>ui.sel[id]).length;
+  const row=(id,d,kid,q)=>{const s=depStats(id);
+    return '<tr class="click" data-act="open-dep" data-id="'+id+'"><td><input type="checkbox" data-act="sel-dep" data-id="'+id+'" aria-label="Pilih untuk unduh gabungan"'+(ui.sel[id]?' checked':'')+'></td>'
+    +'<td'+(kid?' style="padding-left:30px"':'')+'><span class="strong">'+(kid?'<span class="mut">&#8627; </span>':'')+esc(d.name||'-')+'</span>'+(d.tl&&d.tl.name?'<div class="small mut">TL: '+esc(d.tl.name)+'</div>':'')+'</td>'
+    +'<td>'+esc(rangeText(d.departDate,d.returnDate))+'<div class="small mut">'+esc(durCode(d.departDate,d.returnDate))+'</div></td><td class="r num">'+s.n+'</td>'
+    +'<td>'+(kid?'<span class="small mut">berbagi kuota induk</span>':(q.has?'<span class="strong num">'+q.used+' / '+q.quota+'</span> '+quotaPill(q)+(q.parts.length>1?'<div class="small mut">total semua program</div>':''):'<span class="small mut">kuota belum diatur</span>'))+'</td>'
+    +'<td class="r num">'+s.bk+'</td><td class="r num">'+rp(s.total)+'</td><td class="r num">'+(s.bal?'<span style="color:var(--red);font-weight:600">'+rp(s.bal)+'</span>':'-')+'</td></tr>'};
+  let body='';
+  roots.forEach(([id,d])=>{const q=quotaInfo(id);body+=row(id,d,false,q);depKids(id).forEach(([kid,kd])=>{body+=row(kid,kd,true,q)})});
+  return '<div class="pagehead"><div><h1>Rekap Keberangkatan</h1><p>Peserta, kuota, paspor, penerbangan, dan kamar per keberangkatan, siap diunduh sebagai Excel.</p></div><div class="row"><button class="btn" data-act="xlsx-sel"'+(nsel?'':' disabled')+'>Unduh Excel ('+nsel+' dipilih)</button><button class="btn primary" data-act="new-dep">+ Keberangkatan baru</button></div></div>'
+  +'<div class="card">'+(roots.length?'<div class="tablewrap"><table class="t" style="min-width:900px"><thead><tr><th style="width:36px"></th><th>Keberangkatan</th><th>Periode</th><th class="r">Peserta</th><th>Kuota</th><th class="r">Booking</th><th class="r">Total tagihan</th><th class="r">Sisa bayar</th></tr></thead><tbody>'+body+'</tbody></table></div><div class="cb hint">Program 2 Negara (4D/5D) dikaitkan ke induk 3 Negara pada tanggal yang sama lewat Ubah keberangkatan, dan memakai kuota induk bersama-sama. Mencentang induk lalu Unduh Excel otomatis menyertakan semua program turunannya.</div>'
     :'<div class="empty"><h3>Belum ada keberangkatan</h3><p>Buat keberangkatan (misalnya Tour 3 Negara, 18-24 Nov 2026), lalu hubungkan booking ke keberangkatan itu dari form booking. Peserta, paspor, penerbangan, dan kamar akan terkumpul otomatis.</p><div class="row"><button class="btn primary" data-act="new-dep">+ Keberangkatan baru</button><button class="btn" data-act="seed">Isi data contoh</button></div></div>')+'</div>';
 }
 function vDeparture(id){
@@ -1114,9 +1159,10 @@ function vDeparture(id){
   const roomRows=plan.groups.map(g=>g.rows.map((r,i)=>'<tr><td class="c">'+(++rn)+'</td><td class="strong">'+esc(r.name)+'<div class="small mut">'+esc(r.agent)+'</div></td><td class="c">'+(i===0?esc(g.room.family||''):'')+'</td><td class="c">'+(i===0?'<span class="rtag" style="background:'+hex(ROOM_COL[g.room.type]||'ddd')+'">'+esc(g.room.type)+'</span>':'')+'</td><td class="small">'+(i===0?esc(g.room.note||''):'')+'</td></tr>').join('')).join('')
     +plan.free.map(r=>'<tr><td class="c">'+(++rn)+'</td><td class="strong">'+esc(r.name)+'<div class="small mut">'+esc(r.agent)+'</div></td><td></td><td class="c"><span class="miss">belum dapat kamar</span></td><td></td></tr>').join('');
   return '<div class="pagehead"><div><button class="btn sm" data-act="back-dep">&larr; Semua keberangkatan</button><h1 style="margin-top:10px">'+esc(d.name||'-')+'</h1><p>'+esc(per)+(dur?' · '+esc(dur):'')+'</p></div>'
-  +'<div class="row"><button class="btn" data-act="edit-dep" data-id="'+id+'">Ubah / Tour Leader</button><button class="btn primary" data-act="xlsx-dep" data-id="'+id+'">Unduh Excel</button></div></div>'
+  +'<div class="row"><button class="btn" data-act="edit-dep" data-id="'+id+'">Ubah / Tour Leader / Kuota</button>'+(groupOf(id)===id&&depKids(id).length?'<button class="btn" data-act="xlsx-one" data-id="'+id+'">Excel program ini saja</button><button class="btn primary" data-act="xlsx-dep" data-id="'+id+'">Unduh Excel ('+(1+depKids(id).length)+' program)</button>':'<button class="btn primary" data-act="xlsx-one" data-id="'+id+'">Unduh Excel</button>')+'</div></div>'
   +'<div class="kpis"><div class="card kpi"><small>Peserta</small><b class="num">'+s.n+'</b><span>'+(tl?'+ 1 tour leader':'tour leader belum diisi')+'</span></div><div class="card kpi"><small>Booking / agen</small><b class="num">'+s.bk+'</b></div><div class="card kpi"><small>Total tagihan</small><b class="num">'+rp(s.total)+'</b><span>diterima '+rp(s.paid)+'</span></div><div class="card kpi"><small>Sisa pembayaran</small><b class="num">'+rp(s.bal)+'</b></div></div>'
   +(d.notes?'<div class="banner">'+esc(d.notes)+'</div>':'')
+  +quotaCard(id)
   +'<div class="card"><div class="ch"><h2>Daftar paspor dan penerbangan</h2><span class="hint">Warna sama = penerbangan sama</span></div>'
   +(rows.length||tl?'<div class="tablewrap"><table class="t rk"><thead><tr><th class="c">No</th><th>Nama</th><th>No paspor</th><th class="c">Tgl lahir</th><th class="c">Expired</th><th class="c">Nationality</th><th class="c">Flight</th><th class="c">Berangkat</th><th class="c">Flight</th><th class="c">Pulang</th><th class="c">Kode book</th><th class="c">Bagasi</th><th>Agent</th><th class="c">Kamar</th></tr></thead><tbody>'+rows.map((r,i)=>prow(r,i+1)).join('')+(tl?prow(tl,'TL'):'')+'</tbody></table></div>'
     :'<div class="empty"><h3>Belum ada peserta</h3>Hubungkan booking ke keberangkatan ini lewat form booking (pilih "Keberangkatan"), lalu isi data paspor dan penerbangan tiap peserta.</div>')+'</div>'
@@ -1129,13 +1175,18 @@ function vDeparture(id){
 }
 /* ---- form keberangkatan ---- */
 function openDepForm(id){
-  const D=id?clone(S.departures[id]):{name:'',departDate:'',returnDate:'',notes:'',tl:{},rooms:[]};
-  D.tl=D.tl||{};
+  const D=id?clone(S.departures[id]):{name:'',departDate:'',returnDate:'',notes:'',tl:{},rooms:[],quota:0,parentId:''};
+  D.tl=D.tl||{};if(D.quota===undefined)D.quota=0;if(!D.parentId)D.parentId='';
+  const hasKids=!!(id&&depKids(id).length);
+  const parents=Object.entries(S.departures).filter(([k,d])=>k!==id&&groupOf(k)===k).sort((a,b)=>(a[1].departDate||'').localeCompare(b[1].departDate||''));
   FORM={D,modal:true};
   openModal('<div class="sh"><h2>'+(id?'Ubah keberangkatan':'Keberangkatan baru')+'</h2><button class="x" data-act="close" aria-label="Tutup">&times;</button></div><div class="sb">'
   +'<fieldset><legend>Keberangkatan</legend><div class="fgrid">'
   +fld('Nama tour *',inp('name',D.name,{ph:'TOUR 3 NEGARA ASIA'}),'span2')+fld('Tanggal berangkat *',inp('departDate',D.departDate,{type:'date'}))+fld('Tanggal pulang *',inp('returnDate',D.returnDate,{type:'date'}))
-  +fld('Catatan (tampil di rekap)',txa('notes',D.notes,2),'full')+'</div></fieldset>'
+  +fld('Kuota kursi (seluruh program pada tanggal ini)',inp('quota',nz(D.quota),{type:'number',min:0,ph:'Mis. 30'}))
+  +(hasKids?'<div class="fld"><span>Induk keberangkatan</span><div class="hint" style="padding-top:8px">Ini keberangkatan induk: program turunannya memakai kuota ini.</div></div>':fld('Induk keberangkatan (berbagi kuota)',sel('parentId',D.parentId,[['','Tidak ada (keberangkatan induk / mandiri)']].concat(parents.map(([k,d])=>[k,d.name+' · '+rangeShort(d.departDate,d.returnDate)]))))
+  )
+  +fld('Catatan (tampil di rekap)',txa('notes',D.notes,2),'full')+'</div><p class="hint" style="margin:8px 0 0">Contoh: 3 Negara 7D6N sebagai induk dengan kuota 30. Lalu 2 Negara 4D3N dan 5D4N memilih induk tersebut, sehingga ketiganya memakai 30 kursi yang sama. Kuota di program turunan diabaikan.</p></fieldset>'
   +'<fieldset><legend>Tour leader</legend><div class="fgrid">'
   +fld('Nama tour leader',inp('tl.name',D.tl.name),'span2')+fld('No. paspor',inp('tl.idNo',D.tl.idNo))+fld('Tanggal lahir',inp('tl.birth',D.tl.birth,{type:'date'}))+fld('Paspor berlaku sampai',inp('tl.expiry',D.tl.expiry,{type:'date'}))+fld('Kewarganegaraan',inp('tl.nat',D.tl.nat,{ph:'INDONESIA'}))
   +fld('Flight berangkat',inp('tl.flOut',D.tl.flOut))+fld('Rute berangkat',inp('tl.flOutRoute',D.tl.flOutRoute),'span2')+fld('Flight pulang',inp('tl.flIn',D.tl.flIn))+fld('Rute pulang',inp('tl.flInRoute',D.tl.flInRoute),'span2')
@@ -1147,12 +1198,16 @@ async function saveDep(id){
   if(!(D.name||'').trim())return err('Nama tour wajib diisi.');
   if(!D.departDate||!D.returnDate)return err('Tanggal berangkat dan pulang wajib diisi.');
   if(D.returnDate<D.departDate)return err('Tanggal pulang tidak boleh sebelum tanggal berangkat.');
+  if(D.parentId&&id&&D.parentId===id)return err('Induk tidak boleh diri sendiri.');
+  if(D.parentId&&id&&depKids(id).length)return err('Keberangkatan ini punya program turunan, jadi tidak bisa menjadi turunan.');
+  D.quota=num(D.quota);
   await safe(async()=>{
     const nid=id||uid();D.name=D.name.trim();if(!id)D.createdAt=Date.now();
     await put('departures',nid,D);closeModal();ui.route='rekap';ui.depId=nid;try{history.replaceState(null,'','#rekap')}catch(e){}render(true);toast('Keberangkatan disimpan');
   });
 }
 async function delDep(id){
+  if(depKids(id).length){toast('Masih ada program turunan. Lepaskan dulu keterkaitannya.');return}
   if(Object.values(S.bookings).some(b=>b.departureId===id)){toast('Masih ada booking di keberangkatan ini. Ubah booking-nya dulu.');return}
   await safe(async()=>{await del('departures',id);closeModal();ui.depId=null;render(true);toast('Keberangkatan dihapus')});
 }
@@ -1329,7 +1384,7 @@ async function seed(){
       await put('customers','smpc4',{name:'Agen Contoh Wisata',short:'AGEN A',type:'Agen / Mitra',phone:'0812-0000-0404',email:'',address:'',idNo:'',notes:'',sample:true,createdAt:Date.now()});
       await put('customers','smpc5',{name:'Mitra Contoh Travel',short:'MITRA B',type:'Agen / Mitra',phone:'0812-0000-0505',email:'',address:'',idNo:'',notes:'',sample:true,createdAt:Date.now()});
       const rooms=[{id:'smpr1',type:'TWIN',family:'FAMILY',note:'',pids:['smpa1','smpa2']},{id:'smpr2',type:'DOUBLE',family:'FAMILY',note:'Request bersebelahan',pids:['smpa3','smpa4']},{id:'smpr3',type:'TWIN',family:'',note:'',pids:['smpa5','smpb1']}];
-      await put('departures','smpd1',{name:'TOUR 3 NEGARA ASIA',departDate:dd,returnDate:rd,notes:'Data fiktif untuk contoh. Hapus lewat Pengaturan > Hapus data contoh.',tl:{name:'MR TOUR LEADER CONTOH',idNo:'A0000099',birth:'1990-01-15',expiry:addDays(t,1500),nat:'INDONESIA',flOut:'',flOutRoute:'',flIn:'QZ211',flInRoute:'KUL 20.45-CGK 21.55',pnr:'ABC123',bag:'0'},rooms,sample:true,createdAt:Date.now()});
+      await put('departures','smpd1',{name:'TOUR 3 NEGARA ASIA',departDate:dd,returnDate:rd,quota:12,notes:'Data fiktif untuk contoh. Hapus lewat Pengaturan > Hapus data contoh.',tl:{name:'MR TOUR LEADER CONTOH',idNo:'A0000099',birth:'1990-01-15',expiry:addDays(t,1500),nat:'INDONESIA',flOut:'',flOutRoute:'',flIn:'QZ211',flInRoute:'KUL 20.45-CGK 21.55',pnr:'ABC123',bag:'0'},rooms,sample:true,createdAt:Date.now()});
       const P=(pid,name,no,exp,extra)=>({pid,name,type:'Dewasa',idNo:no,birth:'1985-05-05',expiry:exp,nat:'INDONESIA',...extra});
       const mkb=(o)=>({status:'confirmed',tripType:'Internasional',sales:'Rina',discount:0,adminFee:0,taxPct:0,notes:'',payments:[],departureId:'smpd1',destination:'TOUR 3 NEGARA ASIA MALAYSIA – SINGAPORE – THAILAND (HAT YAI) 7H6M',pkgNote:'Land Only',departDate:dd,returnDate:rd,invoiceDate:addDays(t,-5),dueDate:addDays(t,25),pkgPrice:4550000,pkgCost:4200000,tipsPerPax:650000,...o,sample:true,createdAt:Date.now()});
       const bA=mkb({customerId:'smpc4',discount:1800000,fl:{out:'QZ324',outRoute:'SUB 07.00-KUL 10.35',in:'QZ325',inRoute:'KUL 11.10-SUB 12.50',pnr:'XQZLMN',bag:'0/0'},
@@ -1338,7 +1393,9 @@ async function seed(){
       const bB=mkb({customerId:'smpc5',fl:{out:'QZ204',outRoute:'CGK 14.10-KUL 17.20',in:'QZ205',inRoute:'KUL 18.00-CGK 19.10',pnr:'PLKMJN',bag:'0/20KG'},
         passengers:[P('smpa5','MS EKA CONTOH','A0000005',addDays(t,1200)),P('smpb1','MS FITRI CONTOH','A0000006',addDays(t,1200)),P('smpb2','MR GALIH CONTOH','',''),{...P('smpb3','MR HADI CONTOH','',''),flOut:'AK385',flOutRoute:'CGK 15.10-KUL 18.20',flIn:'AK353',flInRoute:'KUL 19.00-CGK 20.20'}],
         payments:[{id:'p1',date:addDays(t,-3),method:'Transfer Bank',amount:3000000,ref:'TRF-4002',note:'DP'}]});
-      for(const [id,b] of [['smpb5',bA],['smpb6',bB]]){b.code=genCode();b.invoiceNo=nextInvoiceNo(b.invoiceDate);await put('bookings',id,b)}
+      await put('departures','smpd2',{name:'TOUR 2 NEGARA ASIA',parentId:'smpd1',departDate:dd,returnDate:addDays(dd,3),notes:'',tl:{},rooms:[],sample:true,createdAt:Date.now()});
+      const bC=mkb({customerId:'smpc5',departureId:'smpd2',destination:'TOUR 2 NEGARA ASIA MALAYSIA – SINGAPORE 4H3M',returnDate:addDays(dd,3),pkgPrice:3200000,tipsPerPax:400000,fl:{out:'QZ204',outRoute:'CGK 14.10-KUL 17.20',in:'AK384',inRoute:'KUL 13.20-CGK 14.30',pnr:'RTYUIO',bag:'0/20KG'},passengers:[P('smpc1','MS INDAH CONTOH','A0000007',addDays(t,1200)),P('smpc2','MR JOKO CONTOH','A0000008',addDays(t,1200))]});
+      for(const [id,b] of [['smpb5',bA],['smpb6',bB],['smpb7',bC]]){b.code=genCode();b.invoiceNo=nextInvoiceNo(b.invoiceDate);await put('bookings',id,b)}
     }
 
     toast('Data contoh ditambahkan');
@@ -1387,7 +1444,8 @@ document.addEventListener('click',async e=>{
     case 'open-dep':ui.depId=id;render(true);window.scrollTo(0,0);break;
     case 'back-dep':ui.depId=null;render(true);break;
     case 'sel-dep':ui.sel[id]=!ui.sel[id];render(true);break;
-    case 'xlsx-dep':exportRekap([id]);break;
+    case 'xlsx-dep':exportRekap([id],true);break;
+    case 'xlsx-one':exportRekap([id],false);break;
     case 'xlsx-sel':exportRekap(Object.keys(ui.sel).filter(k=>ui.sel[k]));break;
     case 'rooms':openRooms(id);break;
     case 'room-add':FORM.D.rooms.push({id:uid(),type:'TWIN',family:'',note:'',pids:['','']});FORM.rerender();break;
