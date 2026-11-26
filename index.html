@@ -181,6 +181,10 @@ table.t.rk tr.tlrow td{background:var(--warn-soft)}
 .linkbtn:hover{text-decoration:underline}
 .logoprev{max-height:70px;max-width:260px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px}
 table.t td.num{white-space:nowrap}
+.loginwrap{min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg)}
+.logincard{width:100%;max-width:380px;background:var(--card,#fff);border:1px solid var(--line);border-radius:16px;padding:28px;display:grid;gap:12px;text-align:center}
+.logincard .fld{text-align:left}.logincard h1{font-size:22px;margin:0}.loginlogo{max-height:64px;max-width:100%;margin:0 auto 4px;display:block}
+.uchip{border-top:1px solid var(--line);padding-top:12px;margin-bottom:12px;display:grid;gap:8px;font-size:13px}.uchip small{display:block;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -310,8 +314,8 @@ const pv=(b,p,k)=>{const v=p[k];if(v!==undefined&&v!==null&&String(v).trim()!=='
 const paxOf=b=>(b.passengers||[]).filter(p=>(p.name||'').trim());
 const pxPrice=(b,p)=>{const v=p&&p.price;return (v===undefined||v===null||v==='')?num(b.pkgPrice):num(v)};
 const isPaxPriced=b=>paxOf(b).some(p=>pxPrice(b,p)>0);
-const COLS=['customers','catalog','bookings','departures'];
-const S={customers:{},catalog:{},bookings:{},departures:{},settings:clone(DEF_SET),loaded:false,mode:'local',got:{},slow:false};
+const COLS=['customers','catalog','bookings','departures','users'];
+const S={customers:{},catalog:{},bookings:{},departures:{},users:{},settings:clone(DEF_SET),loaded:false,mode:'local',got:{},slow:false};
 const ui={route:'dashboard',q:'',fStatus:'',fPay:'',fCat:'',bookingId:null,depId:null,sel:{},repFrom:todayISO().slice(0,4)+'-01-01',repTo:todayISO(),dirty:false};
 
 
@@ -323,12 +327,13 @@ const ICON={
   dashboard:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
   booking:'<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M3 13h18"/>',
   rekap:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  pengguna:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-6 8-6s8 2 8 6"/>',
   pelanggan:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6M16 4.5a3.5 3.5 0 010 7M18 14c2.2.7 3.5 2.6 3.5 6"/>',
   katalog:'<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.2"/>',
   laporan:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   pengaturan:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>'
 };
-const NAV=[['dashboard','Dashboard'],['booking','Booking & Invoice'],['rekap','Rekap Keberangkatan'],['pelanggan','Pelanggan'],['katalog','Katalog Layanan'],['laporan','Laporan'],['pengaturan','Pengaturan']];
+const NAV=[['dashboard','Dashboard'],['booking','Booking & Invoice'],['rekap','Rekap Keberangkatan'],['pelanggan','Pelanggan'],['katalog','Katalog Layanan'],['laporan','Laporan'],['pengguna','Pengguna'],['pengaturan','Pengaturan']];
 
 /* ============ Perhitungan ============ */
 function calc(b){
@@ -376,8 +381,8 @@ const bookingsArr=()=>Object.entries(S.bookings).map(([id,b])=>({id,b,c:calc(b)}
 
 /* ============ Penyimpanan ============ */
 const LS='kn-booking-v1';
-function saveLocal(){try{localStorage.setItem(LS,JSON.stringify({customers:S.customers,catalog:S.catalog,bookings:S.bookings,departures:S.departures,settings:S.settings}))}catch(e){}}
-function loadLocal(){try{const d=JSON.parse(localStorage.getItem(LS)||'null');if(d){S.customers=d.customers||{};S.catalog=d.catalog||{};S.bookings=d.bookings||{};S.departures=d.departures||{};S.settings=normSet(d.settings)}}catch(e){}}
+function saveLocal(){try{localStorage.setItem(LS,JSON.stringify({customers:S.customers,catalog:S.catalog,bookings:S.bookings,departures:S.departures,users:S.users,settings:S.settings}))}catch(e){}}
+function loadLocal(){try{const d=JSON.parse(localStorage.getItem(LS)||'null');if(d){S.customers=d.customers||{};S.catalog=d.catalog||{};S.bookings=d.bookings||{};S.departures=d.departures||{};S.users=d.users||{};S.settings=normSet(d.settings)}}catch(e){}}
 async function put(col,id,data){
   data=clone(data);
   if(col==='config')S.settings=normSet(data);else S[col][id]=data;
@@ -602,7 +607,7 @@ function openModal(html,cls){
   m.hidden=false;document.body.classList.add('noscroll');
 }
 function closeModal(){const m=$('#modal');m.hidden=true;m.innerHTML='';document.body.classList.remove('noscroll');if(FORM&&FORM.modal)FORM=null}
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#modal').hidden)closeModal()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#modal').hidden)closeModal();if(e.key==='Enter'&&e.target.closest&&e.target.closest('#loginForm')){e.preventDefault();const b=$('#loginForm button[data-act]');if(b)b.click()}});
 
 /* ============ Komponen form ============ */
 const fld=(label,inner,cls)=>'<label class="fld '+(cls||'')+'"><span>'+esc(label)+'</span>'+inner+'</label>';
@@ -622,15 +627,17 @@ document.addEventListener('input',e=>{
 function overdueCount(){return bookingsArr().filter(x=>x.b.status!=='cancelled'&&x.c.balance>0&&x.b.dueDate&&x.b.dueDate<todayISO()).length}
 function shell(inner){
   const st=S.settings,od=overdueCount();
-  const nav=NAV.map(([k,l])=>'<button data-act="nav" data-r="'+k+'"'+(ui.route===k?' aria-current="page"':'')+'><svg viewBox="0 0 24 24" aria-hidden="true">'+ICON[k]+'</svg>'+esc(l)+(k==='booking'&&od?'<span class="cnt" title="Invoice jatuh tempo">'+od+'</span>':'')+'</button>').join('');
+  const nav=NAV.filter(n=>navOK(n[0])).map(([k,l])=>'<button data-act="nav" data-r="'+k+'"'+(ui.route===k?' aria-current="page"':'')+'><svg viewBox="0 0 24 24" aria-hidden="true">'+ICON[k]+'</svg>'+esc(l)+(k==='booking'&&od?'<span class="cnt" title="Invoice jatuh tempo">'+od+'</span>':'')+'</button>').join('');
   const note=S.mode==='db'?'Data tersimpan di artifact ini dan terbuka dari perangkat mana pun yang punya akses.':'Mode lokal: data hanya tersimpan di browser ini. Buka lewat tautan artifact yang sudah dipublikasikan agar data tersimpan di cloud.';
-  return '<aside class="side"><div class="brand">'+(st.logo?'<div class="logochip"><img src="'+esc(st.logo)+'" alt="'+esc(st.name)+'"></div>':'<div class="mark">'+esc((st.name||'T').charAt(0).toUpperCase())+'</div><div><b>'+esc(st.name)+'</b><small>'+esc(st.tagline)+'</small></div>')+'</div><nav class="nav" aria-label="Menu utama">'+nav+'</nav><div class="sidenote">'+note+'</div></aside><main class="main">'+inner+'</main>';
+  return '<aside class="side"><div class="brand">'+(st.logo?'<div class="logochip"><img src="'+esc(st.logo)+'" alt="'+esc(st.name)+'"></div>':'<div class="mark">'+esc((st.name||'T').charAt(0).toUpperCase())+'</div><div><b>'+esc(st.name)+'</b><small>'+esc(st.tagline)+'</small></div>')+'</div><nav class="nav" aria-label="Menu utama">'+nav+'</nav>'+userChip()+'<div class="sidenote">'+note+'</div></aside><main class="main">'+inner+'</main>';
 }
 function render(force){
   const app=$('#app');if(!app)return;
   if(!S.loaded){app.innerHTML=shell('<div class="empty card"><h3>'+(S.slow?'Data belum bisa dijangkau':'Memuat data')+'</h3>'+(S.slow?'Periksa koneksi internet. Halaman akan terisi sendiri begitu data tersedia.':'Sebentar ya.')+'</div>');return}
+  if(!meU()){if(!force&&$('#loginForm'))return;app.innerHTML=vLogin();return}
+  if(!navOK(ui.route))ui.route='dashboard';
   if(ui.route==='pengaturan'&&ui.dirty&&!force)return;
-  const V={dashboard:vDashboard,rekap:()=>ui.depId&&S.departures[ui.depId]?vDeparture(ui.depId):vRekap(),booking:()=>ui.bookingId&&S.bookings[ui.bookingId]?vDetail(ui.bookingId):vBookings(),pelanggan:vCustomers,katalog:vCatalog,laporan:vReports,pengaturan:vSettings};
+  const V={dashboard:vDashboard,rekap:()=>ui.depId&&S.departures[ui.depId]?vDeparture(ui.depId):vRekap(),booking:()=>ui.bookingId&&S.bookings[ui.bookingId]?vDetail(ui.bookingId):vBookings(),pelanggan:vCustomers,katalog:vCatalog,laporan:vReports,pengguna:vUsers,pengaturan:vSettings};
   app.innerHTML=shell(V[ui.route]());
   if(ui.route==='pengaturan'){FORM={D:clone(S.settings),settings:true}}
 }
@@ -639,7 +646,7 @@ function updateList(){
   const T={booking:tBookings,pelanggan:tCustomers,katalog:tCatalog};
   if(T[ui.route])el.innerHTML=T[ui.route]();
 }
-function go(r){ui.route=r;ui.q='';ui.fStatus='';ui.fPay='';ui.fCat='';ui.bookingId=null;ui.depId=null;ui.dirty=false;FORM=null;try{history.replaceState(null,'','#'+r)}catch(e){}render(true);window.scrollTo(0,0)}
+function go(r){if(!navOK(r))r='dashboard';ui.route=r;ui.q='';ui.fStatus='';ui.fPay='';ui.fCat='';ui.fBy='';ui.bookingId=null;ui.depId=null;ui.dirty=false;FORM=null;try{history.replaceState(null,'','#'+r)}catch(e){}render(true);window.scrollTo(0,0)}
 window.addEventListener('hashchange',()=>{const r=(location.hash||'').slice(1);if(NAV.some(n=>n[0]===r)&&r!==ui.route)go(r)});
 
 /* ============ Dashboard ============ */
@@ -696,7 +703,7 @@ function vBookings(){
   return '<div class="pagehead"><div><h1>Booking & Invoice</h1><p>Setiap booking otomatis punya nomor invoice, riwayat pembayaran, dan kwitansi.</p></div><div class="row"><button class="btn primary" data-act="new-booking">+ Booking baru</button></div></div>'
   +'<div class="card"><div class="filters"><input type="search" id="q" placeholder="Cari kode, invoice, pelanggan, tujuan" value="'+esc(ui.q)+'" aria-label="Cari booking">'
   +'<select id="fStatus" aria-label="Status booking"><option value="">Semua status</option>'+Object.entries(BSTAT).map(([k,l])=>'<option value="'+k+'"'+(ui.fStatus===k?' selected':'')+'>'+l+'</option>').join('')+'</select>'
-  +'<select id="fPay" aria-label="Status pembayaran"><option value="">Semua pembayaran</option>'+[['unpaid','Belum dibayar'],['partial','Dibayar sebagian'],['overdue','Jatuh tempo'],['paid','Lunas']].map(([k,l])=>'<option value="'+k+'"'+(ui.fPay===k?' selected':'')+'>'+l+'</option>').join('')+'</select></div>'
+  +'<select id="fPay" aria-label="Status pembayaran"><option value="">Semua pembayaran</option>'+[['unpaid','Belum dibayar'],['partial','Dibayar sebagian'],['overdue','Jatuh tempo'],['paid','Lunas']].map(([k,l])=>'<option value="'+k+'"'+(ui.fPay===k?' selected':'')+'>'+l+'</option>').join('')+'</select>'+(isAdmin()?'<select id="fBy" aria-label="Dibuat oleh"><option value="">Semua pembuat</option>'+Object.entries(S.users).map(([k,u])=>'<option value="'+k+'"'+(ui.fBy===k?' selected':'')+'>'+esc(u.name)+'</option>').join('')+'</select>':'')+'</div>'
   +'<div class="tablewrap" id="listbody">'+tBookings()+'</div></div>';
 }
 function tBookings(){
@@ -704,12 +711,13 @@ function tBookings(){
   const rows=bookingsArr().filter(x=>{
     if(ui.fStatus&&x.b.status!==ui.fStatus)return false;
     if(ui.fPay&&payState(x.b).k!==ui.fPay)return false;
-    if(q&&!([x.b.code,x.b.invoiceNo,custName(x.b.customerId),x.b.destination].join(' ').toLowerCase().includes(q)))return false;
+    if(ui.fBy&&(x.b.createdBy||'')!==ui.fBy)return false;
+    if(q&&!([x.b.code,x.b.invoiceNo,custName(x.b.customerId),x.b.destination,x.b.createdByName].join(' ').toLowerCase().includes(q)))return false;
     return true;
   });
   if(!rows.length)return '<div class="empty"><h3>'+(Object.keys(S.bookings).length?'Tidak ada hasil':'Belum ada booking')+'</h3>'+(Object.keys(S.bookings).length?'Ubah kata kunci atau filter.':'Klik "Booking baru" untuk membuat booking dan invoice pertama.')+'</div>';
-  return '<table class="t"><thead><tr><th>Invoice</th><th>Pelanggan</th><th>Perjalanan</th><th class="r">Total</th><th class="r">Sisa</th><th>Status</th></tr></thead><tbody>'
-  +rows.map(x=>{const p=payState(x.b);return '<tr class="click" data-act="open" data-id="'+x.id+'"><td><span class="strong">'+esc(x.b.invoiceNo)+'</span><div class="small mut">'+esc(x.b.code)+' &middot; '+fmtDate(x.b.invoiceDate)+'</div></td><td>'+esc(custName(x.b.customerId))+'</td><td>'+esc(x.b.destination||'-')+'<div class="small mut">'+(x.b.departDate?fmtDate(x.b.departDate):'tanggal belum diisi')+'</div></td><td class="r num">'+rp(x.c.total)+'</td><td class="r num">'+(x.b.status==='cancelled'?'-':rp(Math.max(0,x.c.balance)))+'</td><td><div class="stack" style="align-items:flex-start">'+pill(x.b.status,BSTAT[x.b.status]||x.b.status)+pill(p.k,p.l)+'</div></td></tr>'}).join('')
+  return '<table class="t"><thead><tr><th>Invoice</th><th>Pelanggan</th><th>Perjalanan</th><th>Dibuat oleh</th><th class="r">Total</th><th class="r">Sisa</th><th>Status</th></tr></thead><tbody>'
+  +rows.map(x=>{const p=payState(x.b);return '<tr class="click" data-act="open" data-id="'+x.id+'"><td><span class="strong">'+esc(x.b.invoiceNo)+'</span><div class="small mut">'+esc(x.b.code)+' &middot; '+fmtDate(x.b.invoiceDate)+'</div></td><td>'+esc(custName(x.b.customerId))+'</td><td>'+esc(x.b.destination||'-')+'<div class="small mut">'+(x.b.departDate?fmtDate(x.b.departDate):'tanggal belum diisi')+'</div></td><td>'+esc(x.b.createdByName||'-')+'</td><td class="r num">'+rp(x.c.total)+'</td><td class="r num">'+(x.b.status==='cancelled'?'-':rp(Math.max(0,x.c.balance)))+'</td><td><div class="stack" style="align-items:flex-start">'+pill(x.b.status,BSTAT[x.b.status]||x.b.status)+pill(p.k,p.l)+'</div></td></tr>'}).join('')
   +'</tbody></table>';
 }
 
@@ -724,7 +732,7 @@ function vDetail(id){
   +'<div class="card"><div class="ch"><h2>Perjalanan</h2><div class="row">'+pill(b.status,BSTAT[b.status])+pill(p.k,p.l)+'</div></div><div class="cb"><div class="kv">'
   +'<div><small>Paket / tujuan</small>'+esc(b.destination||'-')+(b.pkgNote?'<div class="small mut">'+esc(b.pkgNote)+'</div>':'')+'</div><div><small>Periode</small>'+esc(periodText(b))+'</div><div><small>Jenis</small>'+esc(b.tripType||'-')+'</div>'
   +'<div><small>Keberangkatan (rekap)</small>'+(dep?'<button class="linkbtn" data-act="goto-dep" data-id="'+b.departureId+'">'+esc(dep.name)+' &rarr;</button>':'<span class="mut">Belum dihubungkan</span>')+'</div>'
-  +'<div><small>Pelanggan / agen</small>'+esc(cu.name||'-')+'<div class="small mut">'+esc([cu.phone,cu.email].filter(Boolean).join(' · '))+'</div></div><div><small>Sales</small>'+esc(b.sales||'-')+'</div><div><small>Tanggal invoice</small>'+fmtDate(b.invoiceDate)+'</div><div><small>Jatuh tempo / pelunasan</small>'+fmtDate(b.dueDate)+'</div></div>'
+  +'<div><small>Pelanggan / agen</small>'+esc(cu.name||'-')+'<div class="small mut">'+esc([cu.phone,cu.email].filter(Boolean).join(' · '))+'</div></div><div><small>Sales</small>'+esc(b.sales||'-')+'</div><div><small>Dibuat oleh</small>'+esc(b.createdByName||'-')+(b.createdAt?'<div class="small mut">'+new Date(b.createdAt).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})+'</div>':'')+'</div>'+(b.updatedByName?'<div><small>Terakhir diubah oleh</small>'+esc(b.updatedByName)+(b.updatedAt?'<div class="small mut">'+new Date(b.updatedAt).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})+'</div>':'')+'</div>':'')+'<div><small>Tanggal invoice</small>'+fmtDate(b.invoiceDate)+'</div><div><small>Jatuh tempo / pelunasan</small>'+fmtDate(b.dueDate)+'</div></div>'
   +(b.notes?'<p class="small mut" style="margin:14px 0 0;white-space:pre-line">'+esc(b.notes)+'</p>':'')+'</div></div>'
   +'<div class="card"><div class="ch"><h2>Rincian tagihan</h2></div><div class="tablewrap"><table class="t" style="min-width:520px"><thead><tr><th>Uraian</th><th class="r">Qty</th><th class="r">Harga</th><th class="r">Jumlah</th></tr></thead><tbody>'
   +billRows(b).map(i=>'<tr><td>'+esc(i.label)+'<div class="small mut">'+esc(i.sub)+'</div></td><td class="r num">'+i.qty+'</td><td class="r num">'+rp(i.price)+'</td><td class="r num">'+rp(i.total)+'</td></tr>').join('')+'</tbody></table></div></div>'
@@ -885,9 +893,10 @@ async function saveBooking(){
     delete rec.newCust;delete rec.dp;delete rec.id;
     rec.code=(D.code||'').trim().toUpperCase()||genCode();
     if(!D.id){
-      rec.invoiceNo=nextInvoiceNo(rec.invoiceDate);rec.createdAt=Date.now();rec.payments=[];
+      rec.invoiceNo=nextInvoiceNo(rec.invoiceDate);rec.createdAt=Date.now();rec.payments=[];{const m=stamp();rec.createdBy=m.by;rec.createdByName=m.byName}
       if(D.dp&&num(D.dp.amount)>0)rec.payments.push({id:uid(),date:D.dp.date||rec.invoiceDate,method:D.dp.method,amount:num(D.dp.amount),ref:D.dp.ref||'',note:'Pembayaran awal / DP'});
     }
+    {const m=stamp();rec.updatedBy=m.by;rec.updatedByName=m.byName;rec.updatedAt=Date.now()}
     await put('bookings',id,rec);
     closeModal();ui.route='booking';ui.bookingId=id;try{history.replaceState(null,'','#booking')}catch(e){}render(true);window.scrollTo(0,0);
     toast(D.id?'Booking diperbarui':'Booking dan invoice dibuat: '+rec.invoiceNo);
@@ -911,7 +920,7 @@ async function savePay(id){
   if(!D.date){$('#ferr').textContent='Tanggal wajib diisi.';return}
   await safe(async()=>{
     const b=clone(S.bookings[id]);b.payments=b.payments||[];
-    b.payments.push({id:uid(),date:D.date,method:D.method,amount:D.kind==='refund'?-amt:amt,ref:D.ref,note:D.note});
+    b.payments.push({id:uid(),date:D.date,method:D.method,amount:D.kind==='refund'?-amt:amt,ref:D.ref,note:D.note,byName:stamp().byName});
     await put('bookings',id,b);closeModal();toast('Pembayaran dicatat');
     const c=calc(b);if(c.balance<=0)toast('Invoice '+b.invoiceNo+' lunas');
   });
@@ -1253,6 +1262,136 @@ async function saveRooms(depId){
   });
 }
 
+/* ============ Login & pengguna ============ */
+const sha256=(()=>{
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  const W=new Array(64);
+  return function(str){
+    const b=Array.from(new TextEncoder().encode(str)),l=b.length*8;
+    b.push(0x80);while(b.length%64!==56)b.push(0);
+    for(let i=7;i>=0;i--)b.push(i>3?0:(l>>>(i*8))&255);
+    let h=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+    const R=(x,n)=>(x>>>n)|(x<<(32-n));
+    for(let o=0;o<b.length;o+=64){
+      for(let i=0;i<16;i++)W[i]=(b[o+i*4]<<24)|(b[o+i*4+1]<<16)|(b[o+i*4+2]<<8)|b[o+i*4+3];
+      for(let i=16;i<64;i++){const a=W[i-15],c=W[i-2];W[i]=(W[i-16]+(R(a,7)^R(a,18)^(a>>>3))+W[i-7]+(R(c,17)^R(c,19)^(c>>>10)))|0}
+      let [a,bb,c,d,e,f,g,hh]=h;
+      for(let i=0;i<64;i++){
+        const t1=(hh+(R(e,6)^R(e,11)^R(e,25))+((e&f)^(~e&g))+K[i]+W[i])|0,t2=((R(a,2)^R(a,13)^R(a,22))+((a&bb)^(a&c)^(bb&c)))|0;
+        hh=g;g=f;f=e;e=(d+t1)|0;d=c;c=bb;bb=a;a=(t1+t2)|0;
+      }
+      h=[(h[0]+a)|0,(h[1]+bb)|0,(h[2]+c)|0,(h[3]+d)|0,(h[4]+e)|0,(h[5]+f)|0,(h[6]+g)|0,(h[7]+hh)|0];
+    }
+    return h.map(x=>('00000000'+(x>>>0).toString(16)).slice(-8)).join('');
+  };
+})();
+function hashPw(salt,pw){let h=sha256(salt+':'+pw);for(let i=0;i<4000;i++)h=sha256(h+salt+pw);return h}
+const newSalt=()=>Array.from(crypto.getRandomValues(new Uint8Array(12))).map(x=>x.toString(16).padStart(2,'0')).join('');
+const AUTH={id:null,fails:0,until:0};
+try{AUTH.id=sessionStorage.getItem('kn-sess')||null}catch(e){}
+function meU(){const u=AUTH.id&&S.users[AUTH.id];return u&&u.active!==false?u:null}
+const isAdmin=()=>{const u=meU();return !!u&&u.role==='admin'};
+function setSess(id){AUTH.id=id;try{id?sessionStorage.setItem('kn-sess',id):sessionStorage.removeItem('kn-sess')}catch(e){}}
+const ADMIN_ONLY=['pengaturan','pengguna','laporan'];
+const navOK=k=>isAdmin()||!ADMIN_ONLY.includes(k);
+const stamp=()=>{const u=meU();return u?{by:AUTH.id,byName:u.name||u.username}:{by:'',byName:''}};
+const ROLE_L={admin:'Admin',staff:'Staf'};
+const usernameOK=s=>/^[a-z0-9._-]{3,30}$/.test(s);
+
+function vLogin(){
+  const first=!Object.keys(S.users).length,st=S.settings;
+  const head=(st.logo?'<img class="loginlogo" src="'+esc(st.logo)+'" alt="'+esc(st.name)+'">':'<div class="mark" style="margin:0 auto 12px">'+esc((st.name||'T').charAt(0).toUpperCase())+'</div>')+'<h1>'+(first?'Buat akun admin':'Masuk')+'</h1>';
+  const f=(id,l,t,ac)=>'<label class="fld"><span>'+l+'</span><input id="'+id+'" type="'+(t||'text')+'" autocomplete="'+(ac||'off')+'"></label>';
+  return '<div class="loginwrap"><form class="logincard" id="loginForm" onsubmit="return false">'+head
+  +(first?'<p class="hint">Belum ada pengguna. Akun pertama ini menjadi admin dan bisa menambah pengguna lain di menu Pengguna.</p>'+f('lname','Nama lengkap')+f('luser','Username','text','username')+f('lpw','Password (min. 6 karakter)','password','new-password')+f('lpw2','Ulangi password','password','new-password')
+    :f('luser','Username','text','username')+f('lpw','Password','password','current-password'))
+  +'<div class="err" id="lerr" style="min-height:18px"></div><button class="btn primary" style="width:100%;justify-content:center" data-act="'+(first?'setup-admin':'login')+'">'+(first?'Buat akun & masuk':'Masuk')+'</button></form></div>';
+}
+function lerr(m){const e=$('#lerr');if(e)e.textContent=m}
+async function doLogin(){
+  const u=($('#luser').value||'').trim().toLowerCase(),pw=$('#lpw').value||'';
+  if(AUTH.until>Date.now())return lerr('Terlalu banyak percobaan. Tunggu '+Math.ceil((AUTH.until-Date.now())/1000)+' detik.');
+  const hit=Object.entries(S.users).find(([k,x])=>x.username===u&&x.active!==false);
+  if(!hit||hashPw(hit[1].salt,pw)!==hit[1].hash){
+    if(++AUTH.fails>=5){AUTH.fails=0;AUTH.until=Date.now()+30000;return lerr('Terlalu banyak percobaan. Coba lagi 30 detik lagi.')}
+    return lerr('Username atau password salah.');
+  }
+  AUTH.fails=0;setSess(hit[0]);
+  try{await put('users',hit[0],{...hit[1],lastLogin:Date.now()})}catch(e){}
+  ui.route='dashboard';render(true);window.scrollTo(0,0);
+}
+async function doSetup(){
+  const name=($('#lname').value||'').trim(),u=($('#luser').value||'').trim().toLowerCase(),p1=$('#lpw').value||'',p2=$('#lpw2').value||'';
+  if(!name)return lerr('Isi nama lengkap.');
+  if(!usernameOK(u))return lerr('Username 3-30 karakter: huruf kecil, angka, titik, strip, garis bawah.');
+  if(p1.length<6)return lerr('Password minimal 6 karakter.');
+  if(p1!==p2)return lerr('Ulangi password dengan sama persis.');
+  await safe(async()=>{const id=uid(),salt=newSalt();await put('users',id,{name,username:u,role:'admin',active:true,salt,hash:hashPw(salt,p1),createdAt:Date.now()});setSess(id);ui.route='dashboard';render(true)});
+}
+function logout(){setSess(null);FORM=null;closeModal();ui.bookingId=null;ui.depId=null;ui.route='dashboard';render(true)}
+function userChip(){
+  const u=meU();if(!u)return '';
+  return '<div class="uchip"><div><b>'+esc(u.name)+'</b><small>'+esc(ROLE_L[u.role]||u.role)+' · @'+esc(u.username)+'</small></div><div class="row"><button class="btn sm" data-act="pw-open">Ganti password</button><button class="btn sm" data-act="logout">Keluar</button></div></div>';
+}
+/* ---- halaman pengguna ---- */
+function vUsers(){
+  const arr=Object.entries(S.users).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
+  const cnt=id=>Object.values(S.bookings).filter(b=>b.createdBy===id).length;
+  return '<div class="pagehead"><div><h1>Pengguna</h1><p>Daftarkan siapa saja yang boleh masuk. Setiap booking mencatat pembuatnya.</p></div><div class="row"><button class="btn primary" data-act="user-new">+ Pengguna baru</button></div></div>'
+  +'<div class="card"><div class="tablewrap"><table class="t" style="min-width:640px"><thead><tr><th>Nama</th><th>Username</th><th>Peran</th><th>Status</th><th class="r">Booking dibuat</th><th>Terakhir masuk</th></tr></thead><tbody>'
+  +arr.map(([id,u])=>'<tr class="click" data-act="user-edit" data-id="'+id+'"><td class="strong">'+esc(u.name)+(id===AUTH.id?' <span class="small mut">(Anda)</span>':'')+'</td><td>@'+esc(u.username)+'</td><td>'+esc(ROLE_L[u.role]||u.role)+'</td><td>'+(u.active===false?pill('cancelled','Nonaktif'):pill('paid','Aktif'))+'</td><td class="r num">'+cnt(id)+'</td><td class="small mut">'+(u.lastLogin?new Date(u.lastLogin).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'}):'-')+'</td></tr>').join('')
+  +'</tbody></table></div></div>'
+  +'<p class="hint" style="margin:12px 2px">Admin: semua menu, pengaturan, laporan, dan kelola pengguna. Staf: dashboard, booking &amp; invoice, rekap keberangkatan, pelanggan, katalog. Password disimpan dalam bentuk hash, tidak bisa dilihat siapa pun.</p>';
+}
+function openUserForm(id){
+  const u=id?S.users[id]:null;
+  const D=u?{name:u.name,username:u.username,role:u.role,active:u.active===false?'0':'1',pw:''}:{name:'',username:'',role:'staff',active:'1',pw:''};
+  FORM={D,modal:true};
+  openModal('<div class="sh"><h2>'+(u?'Ubah pengguna':'Pengguna baru')+'</h2><button class="x" data-act="close" aria-label="Tutup">&times;</button></div><div class="sb"><div class="fgrid">'
+  +fld('Nama lengkap *',inp('name',D.name),'span2')+fld('Username *',inp('username',D.username,{ph:'huruf kecil, tanpa spasi'}))+fld('Peran',sel('role',D.role,[['staff','Staf'],['admin','Admin']]))
+  +fld(u?'Password baru (kosongkan jika tidak diganti)':'Password * (min. 6 karakter)',inp('pw','',{type:'password'}))+fld('Status',sel('active',D.active,[['1','Aktif'],['0','Nonaktif (tidak bisa masuk)']]))
+  +'</div></div><div class="sf"><span class="err" id="ferr"></span>'+(u&&id!==AUTH.id?'<button class="btn danger" data-act="user-del" data-id="'+id+'" style="margin-right:auto">Hapus</button>':'')+'<button class="btn" data-act="close">Batal</button><button class="btn primary" data-act="user-save" data-id="'+(id||'')+'">Simpan</button></div>');
+}
+async function saveUser(id){
+  const D=FORM.D,err=m=>{$('#ferr').textContent=m};
+  const name=(D.name||'').trim(),un=(D.username||'').trim().toLowerCase();
+  if(!name)return err('Nama wajib diisi.');
+  if(!usernameOK(un))return err('Username 3-30 karakter: huruf kecil, angka, titik, strip, garis bawah.');
+  if(Object.entries(S.users).some(([k,x])=>k!==id&&x.username===un))return err('Username sudah dipakai.');
+  if(!id&&(D.pw||'').length<6)return err('Password minimal 6 karakter.');
+  if(id&&D.pw&&D.pw.length<6)return err('Password minimal 6 karakter.');
+  const active=D.active!=='0';
+  if(id&&(D.role!=='admin'||!active)){
+    const others=Object.entries(S.users).filter(([k,x])=>k!==id&&x.role==='admin'&&x.active!==false);
+    if(S.users[id].role==='admin'&&!others.length)return err('Harus ada minimal satu admin aktif.');
+  }
+  if(id===AUTH.id&&!active)return err('Anda tidak bisa menonaktifkan akun sendiri.');
+  await safe(async()=>{
+    const old=id?S.users[id]:{createdAt:Date.now()};let rec={...old,name,username:un,role:D.role,active};
+    if(D.pw){rec.salt=newSalt();rec.hash=hashPw(rec.salt,D.pw)}
+    const nid=id||uid();await put('users',nid,rec);closeModal();toast(id?'Pengguna diperbarui':'Pengguna ditambahkan');render(true);
+  });
+}
+async function delUser(id){
+  const u=S.users[id];if(!u||id===AUTH.id)return;
+  if(u.role==='admin'&&!Object.entries(S.users).some(([k,x])=>k!==id&&x.role==='admin'&&x.active!==false)){toast('Harus ada minimal satu admin aktif.');return}
+  await safe(async()=>{await del('users',id);closeModal();toast('Pengguna dihapus. Booking lamanya tetap menampilkan namanya.');render(true)});
+}
+function openPwForm(){
+  FORM={D:{old:'',pw:'',pw2:''},modal:true};
+  openModal('<div class="sh"><h2>Ganti password</h2><button class="x" data-act="close" aria-label="Tutup">&times;</button></div><div class="sb"><div class="fgrid">'
+  +fld('Password lama',inp('old','',{type:'password'}),'full')+fld('Password baru (min. 6 karakter)',inp('pw','',{type:'password'}),'full')+fld('Ulangi password baru',inp('pw2','',{type:'password'}),'full')
+  +'</div></div><div class="sf"><span class="err" id="ferr"></span><button class="btn" data-act="close">Batal</button><button class="btn primary" data-act="pw-save">Simpan</button></div>');
+}
+async function savePw(){
+  const D=FORM.D,u=meU(),err=m=>{$('#ferr').textContent=m};
+  if(!u)return;
+  if(hashPw(u.salt,D.old||'')!==u.hash)return err('Password lama salah.');
+  if((D.pw||'').length<6)return err('Password baru minimal 6 karakter.');
+  if(D.pw!==D.pw2)return err('Ulangi password baru dengan sama persis.');
+  await safe(async()=>{const salt=newSalt();await put('users',AUTH.id,{...u,salt,hash:hashPw(salt,D.pw)});closeModal();toast('Password diganti')});
+}
+
 /* ============ Pelanggan ============ */
 function vCustomers(){
   return '<div class="pagehead"><div><h1>Pelanggan</h1><p>Data kontak dan riwayat transaksi tiap pelanggan.</p></div><div class="row"><button class="btn primary" data-act="new-cust">+ Pelanggan baru</button></div></div>'
@@ -1417,7 +1556,7 @@ async function unseed(){
   });
 }
 function backup(){
-  saveFile('cadangan-booking-'+todayISO()+'.json',JSON.stringify({version:1,exportedAt:new Date().toISOString(),settings:S.settings,customers:S.customers,catalog:S.catalog,bookings:S.bookings,departures:S.departures},null,2));
+  saveFile('cadangan-booking-'+todayISO()+'.json',JSON.stringify({version:1,exportedAt:new Date().toISOString(),settings:S.settings,customers:S.customers,catalog:S.catalog,bookings:S.bookings,departures:S.departures,users:S.users},null,2));
 }
 async function restoreFrom(file){
   try{
@@ -1444,6 +1583,15 @@ document.addEventListener('click',async e=>{
   const a=el.dataset.act,id=el.dataset.id,i=parseInt(el.dataset.i);
   switch(a){
     case 'nav':go(el.dataset.r);break;
+    case 'login':doLogin();break;
+    case 'setup-admin':doSetup();break;
+    case 'logout':logout();break;
+    case 'pw-open':openPwForm();break;
+    case 'pw-save':savePw();break;
+    case 'user-new':openUserForm();break;
+    case 'user-edit':openUserForm(id);break;
+    case 'user-save':saveUser(id||null);break;
+    case 'user-del':if(armed(el))delUser(id);break;
     case 'goto-dep':closeModal();ui.route='rekap';ui.depId=el.dataset.id;try{history.replaceState(null,'','#rekap')}catch(x){}render(true);window.scrollTo(0,0);break;
     case 'new-dep':openDepForm();break;
     case 'edit-dep':openDepForm(id);break;
@@ -1505,9 +1653,10 @@ document.addEventListener('change',async e=>{
   if(t.id==='restoreFile'){if(t.files[0])await restoreFrom(t.files[0]);t.value='';return}
   if(t.id==='fStatus'){ui.fStatus=t.value;updateList()}
   else if(t.id==='fPay'){ui.fPay=t.value;updateList()}
+  else if(t.id==='fBy'){ui.fBy=t.value;updateList()}
   else if(t.id==='fCat'){ui.fCat=t.value;updateList()}
   else if(t.id==='repFrom'||t.id==='repTo'){ui[t.id]=t.value||ui[t.id];render(true)}
-  else if(t.id==='stSel'&&ui.bookingId){await safe(async()=>{const b=clone(S.bookings[ui.bookingId]);b.status=t.value;await put('bookings',ui.bookingId,b);toast('Status diubah ke '+BSTAT[t.value])})}
+  else if(t.id==='stSel'&&ui.bookingId){await safe(async()=>{const b=clone(S.bookings[ui.bookingId]);b.status=t.value;{const m=stamp();b.updatedBy=m.by;b.updatedByName=m.byName;b.updatedAt=Date.now()}await put('bookings',ui.bookingId,b);toast('Status diubah ke '+BSTAT[t.value])})}
   else if(t.id==='logoFile'){const f=t.files[0];if(!f||!FORM||!FORM.settings)return;const img=new Image(),u=URL.createObjectURL(f);img.onload=()=>{const k=Math.min(1,600/img.width),cv=document.createElement('canvas');cv.width=Math.round(img.width*k);cv.height=Math.round(img.height*k);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);FORM.D.logo=cv.toDataURL('image/png');ui.dirty=true;const im=$('#logoPrev');if(im){im.src=FORM.D.logo;im.hidden=false}URL.revokeObjectURL(u)};img.onerror=()=>toast('Gambar tidak bisa dibaca');img.src=u;t.value=''}
   else if(t.dataset&&t.dataset.dep!==undefined&&FORM){const dep=S.departures[FORM.D.departureId];if(dep){const D=FORM.D;if(!(D.destination||'').trim())D.destination=dep.name;if(dep.departDate)D.departDate=dep.departDate;if(dep.returnDate)D.returnDate=dep.returnDate}FORM.rerender()}
   else if(t.dataset&&t.dataset.pkgpick!==undefined&&FORM){const c=S.catalog[t.value];if(c){const D=FORM.D;D.pkgPrice=num(c.price);D.pkgCost=num(c.cost);if(!(D.destination||'').trim())D.destination=c.name}FORM.rerender()}
@@ -1524,6 +1673,7 @@ document.addEventListener('input',e=>{
 
 /* ============ Mulai ============ */
 (async function boot(){
+  S.users=S.users||{};
   const r=(location.hash||'').slice(1);if(NAV.some(n=>n[0]===r))ui.route=r;
   render();
   try{const c=window.claude;if(c&&c.use){DBH=await c.use('db');DL=await c.use('downloads')}}catch(e){}
