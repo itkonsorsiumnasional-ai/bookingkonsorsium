@@ -195,7 +195,7 @@ table.t td.num{white-space:nowrap}
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="sinkron.js"></script>
+<script src="sinkron.js?v=3"></script>
 <script>
 /* ============ Util ============ */
 const $=(s,r=document)=>r.querySelector(s);
@@ -1683,6 +1683,6 @@ document.addEventListener('input',e=>{
   if(DBH){S.mode='db';subscribe()}else{S.mode='local';loadLocal();S.loaded=true;render()}
 })();
 </script>
-<script src="keuangan.js"></script>
+<script src="keuangan.js?v=3"></script>
 </body>
 </html>
