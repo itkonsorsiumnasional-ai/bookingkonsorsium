@@ -278,9 +278,16 @@ BNI : 0145.821.921
 Rekening An PT. Travelkita Bersama
 Mandiri : 156.0010.714.345`;
 const DEF_SET={name:'Konsorsium Nasional',tagline:'Travel partner with heart',address:'',city:'Bekasi',phone:'',email:'',website:'',npwp:'',banks:BANKS_DEF,invPrefix:'INV.KSN-',invStart:10001,taxPct:0,dueDays:7,notes:NOTES_DEF,terms:TERMS_DEF,signer:'',signerTitle:'',logo:LOGO};
+const NOTES_CHN_DEF=`Pembayaran transfer melalui rekening di atas
+Bila tamu batal uang DP dan Pelunasan tersebut tidak dapat di Refund
+Pembayaran Pelunasan Paling Lambat tanggal {DUE}
+Tiket akan di berikan pada saat di Bandara oleh TL
+Bila ada penolakan dari pihak imigrasi di luar tanggung jawab kami
+Apabila Sudah Masuk Dalam 30 Hari Jika ada Pembatalan Sepihak wajib di lunasi`;
+DEF_SET.notesChn=NOTES_CHN_DEF;
 function normSet(s){
   const o={...DEF_SET,...(s||{})};
-  ['banks','notes','terms','city','logo'].forEach(k=>{if(!String(o[k]||'').trim())o[k]=DEF_SET[k]});
+  ['banks','notes','notesChn','terms','city','logo'].forEach(k=>{if(!String(o[k]||'').trim())o[k]=DEF_SET[k]});
   if(!o.invPrefix||o.invPrefix==='INV')o.invPrefix=DEF_SET.invPrefix;
   if(String(o.terms).startsWith('1. Pembayaran dianggap sah'))o.terms=DEF_SET.terms;
   return o;
@@ -418,7 +425,67 @@ let tt;function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clea
 const csvCell=v=>{v=String(v==null?'':v);return /[;"\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
 const toCSV=rows=>'﻿'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n');
 const safeName=s=>String(s).replace(/[^A-Za-z0-9._-]+/g,'-');
+let _pdfLibs=null;
+function loadPdfLibs(){
+  if(_pdfLibs)return _pdfLibs;
+  const ld=u=>new Promise((ok,no)=>{const x=document.createElement('script');x.src=u;x.onload=ok;x.onerror=()=>no(new Error('gagal memuat '+u));document.head.appendChild(x)});
+  _pdfLibs=(async()=>{
+    if(!window.html2canvas)await ld('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    if(!(window.jspdf&&window.jspdf.jsPDF))await ld('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  })();
+  _pdfLibs.catch(()=>{_pdfLibs=null});
+  return _pdfLibs;
+}
+async function htmlToPdf(html){
+  await loadPdfLibs();
+  const fr=document.createElement('iframe');
+  fr.style.cssText='position:fixed;left:-10000px;top:0;width:794px;height:1200px;border:0;visibility:hidden';
+  document.body.appendChild(fr);
+  try{
+    const css='<style>body{background:#fff!important;padding:0!important;margin:0!important}.bar{display:none!important}.paper{box-shadow:none!important;margin:0!important;max-width:none!important;width:794px!important}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style>';
+    await new Promise(r=>{fr.onload=r;fr.srcdoc=html.replace('</head>',css+'</head>')});
+    const d=fr.contentDocument;
+    try{await Promise.race([d.fonts.ready,new Promise(r=>setTimeout(r,2500))])}catch(e){}
+    await Promise.all(Array.from(d.images).map(im=>im.complete?1:new Promise(r=>{im.onload=im.onerror=r})));
+    fr.style.height=Math.max(1200,d.documentElement.scrollHeight+40)+'px';
+    const paper=d.querySelector('.paper')||d.body,SC=2;
+    const cv=await html2canvas(paper,{scale:SC,backgroundColor:'#fff',useCORS:true,logging:false,windowWidth:794});
+    const terms=paper.querySelector('.terms');
+    const pr=paper.getBoundingClientRect();
+    const cuts=[0];if(terms){const y=Math.round((terms.getBoundingClientRect().top-pr.top)*SC);if(y>40&&y<cv.height-40)cuts.push(y)}
+    cuts.push(cv.height);
+    const {jsPDF}=window.jspdf,pdf=new jsPDF({unit:'mm',format:'a4',compress:true});
+    const PW=210,PH=297,M=8,CW=PW-2*M,CH=PH-2*M;let first=true;
+    for(let k=0;k<cuts.length-1;k++){
+      const y0=cuts[k],y1=cuts[k+1],hpx=y1-y0;if(hpx<4)continue;
+      const mm=hpx/cv.width*CW;               // tinggi bila lebar = CW
+      if(mm<=CH*1.12){                          // muat satu halaman (kecilkan sedikit bila perlu)
+        const f=Math.min(1,CH/mm),w=CW*f,h=mm*f;
+        const c=document.createElement('canvas');c.width=cv.width;c.height=hpx;c.getContext('2d').drawImage(cv,0,y0,cv.width,hpx,0,0,cv.width,hpx);
+        if(!first)pdf.addPage();first=false;
+        pdf.addImage(c.toDataURL('image/jpeg',.93),'JPEG',M+(CW-w)/2,M,w,h);
+      }else{                                    // terlalu panjang: potong per halaman
+        const sl=Math.floor(CH/CW*cv.width);
+        for(let y=y0;y<y1;y+=sl){
+          const hh=Math.min(sl,y1-y),c=document.createElement('canvas');c.width=cv.width;c.height=hh;c.getContext('2d').drawImage(cv,0,y,cv.width,hh,0,0,cv.width,hh);
+          if(!first)pdf.addPage();first=false;
+          pdf.addImage(c.toDataURL('image/jpeg',.93),'JPEG',M,M,CW,hh/cv.width*CW);
+        }
+      }
+    }
+    return pdf.output('arraybuffer');
+  }finally{fr.remove()}
+}
 async function saveFile(filename,data){
+  if(/\.html$/.test(filename)&&typeof data==='string'&&data.indexOf('class="paper')>=0){
+    try{
+      toast('Membuat PDF...');
+      const buf=await htmlToPdf(data),pn=filename.replace(/\.html$/,'.pdf');
+      if(DL){try{await DL.save({filename:pn,data:new Uint8Array(buf)});toast('PDF siap disimpan')}catch(e){if(!(e&&e.code==='declined'))toast('Gagal mengunduh: '+((e&&(e.message||e.code))||''))}return}
+      const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([buf],{type:'application/pdf'}));a.download=pn;document.body.appendChild(a);a.click();
+      setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);toast('PDF diunduh: '+pn);return;
+    }catch(e){toast('PDF gagal dibuat ('+((e&&e.message)||'')+'). Mengunduh versi HTML.')}
+  }
   if(!DL){
     try{
       const blob=new Blob([data],{type:/\.json$/.test(filename)?'application/json':/\.csv$/.test(filename)?'text/csv;charset=utf-8':/\.xlsx$/.test(filename)?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'text/html;charset=utf-8'});
@@ -846,6 +913,7 @@ function bookingBody(D,editing){
   +fld('Potongan agen',sel('discMode',D.discMode||'before',[['before','Agent discount: mengurangi dasar pajak'],['after','Agen komisi: dipotong setelah pajak']]))
   +fld('Tips ikut dasar pajak?',sel('tipsTaxable',String(D.tipsTaxable)==='1'?'1':'0',[['0','Tidak (tips non pajak)'],['1','Ya, tips ikut dikenai pajak']]))
   +fld('Format invoice',sel('taxFmt',D.taxFmt||'std',[['auto','Otomatis (pajak sebagai baris bila ada pajak)'],['std','Standar (Total Bersih)'],['row','Program China (pajak sebagai baris, Pelunasan)']]),'span2')
+  +fld('Daftar notes di invoice',sel('notesTpl',D.notesTpl||'auto',[['auto','Otomatis (ikut format invoice)'],['std','Standar (tiket 2&3 Negara)'],['chn','Program China (tiket oleh TL di bandara)']]),'span2')
   +fld('Tanggal invoice',inp('invoiceDate',D.invoiceDate,{type:'date'}))+fld('Pelunasan paling lambat',inp('dueDate',D.dueDate,{type:'date'}))
   +fld('Catatan tambahan di invoice',txa('notes',D.notes,2),'full')
   +'</div></fieldset>'
@@ -1017,7 +1085,7 @@ function invoiceHTML(id){
   }
   (b.payments||[]).forEach((p,i)=>{T+=tr(esc(payLabel(b,i))+' <small>('+fmtDate(p.date)+')</small>',fnum(Math.abs(num(p.amount))),'b')});
   if(b.status!=='cancelled')T+=c.balance>0?tr('Sisa Pembayaran',fnum(c.balance),'b red'):tr('LUNAS','','b okk');
-  const notes=String(st.notes||'').split('\n').map(x=>x.trim()).filter(Boolean).map(l=>'<li'+(l.includes('{DUE}')?' class="red"':'')+'>'+esc(l.replace('{DUE}',fmtLong(b.dueDate)))+'</li>');
+  const useChn=b.notesTpl==='chn'||((b.notesTpl||'auto')==='auto'&&isChn(b)),notes=String(useChn?(st.notesChn||NOTES_CHN_DEF):st.notes||'').split('\n').map(x=>x.trim()).filter(Boolean).map(l=>'<li'+(l.includes('{DUE}')?' class="red"':'')+'>'+esc(l.replace('{DUE}',fmtLong(b.dueDate)))+'</li>');
   if(b.notes)String(b.notes).split('\n').map(x=>x.trim()).filter(Boolean).forEach(l=>notes.push('<li>'+esc(l)+'</li>'));
   return '<div class="paper inv">'+stamp
   +'<div class="ihead">'+(st.logo?'<img class="p-logo" src="'+esc(st.logo)+'" alt="'+esc(st.name)+'">':'<div class="p-co"><b>'+esc(st.name)+'</b><span>'+esc(st.tagline)+'</span></div>')
@@ -1068,7 +1136,7 @@ function invoiceText(id){
 function showPaper(kind,id,i){
   const html=kind==='inv'?invoiceHTML(id):receiptHTML(id,i),b=S.bookings[id];
   const dl=kind==='inv'?'dl-invoice':'dl-receipt';
-  openModal('<div class="sh"><h2>'+(kind==='inv'?'Invoice':'Kwitansi')+' '+esc(kind==='inv'?b.invoiceNo:receiptNo(b,i))+'</h2><button class="x" data-act="close" aria-label="Tutup">&times;</button></div><div class="sb paperwrap">'+html+'</div><div class="sf"><button class="btn" data-act="copy-wa" data-id="'+id+'">Salin teks WhatsApp</button><button class="btn primary" data-act="'+dl+'" data-id="'+id+'" data-i="'+(i||0)+'">Unduh file (HTML, siap cetak)</button></div>','xl');
+  openModal('<div class="sh"><h2>'+(kind==='inv'?'Invoice':'Kwitansi')+' '+esc(kind==='inv'?b.invoiceNo:receiptNo(b,i))+'</h2><button class="x" data-act="close" aria-label="Tutup">&times;</button></div><div class="sb paperwrap">'+html+'</div><div class="sf"><button class="btn" data-act="copy-wa" data-id="'+id+'">Salin teks WhatsApp</button><button class="btn primary" data-act="'+dl+'" data-id="'+id+'" data-i="'+(i||0)+'">Unduh PDF</button></div>','xl');
 }
 
 /* ============ Rekap keberangkatan ============ */
@@ -1520,6 +1588,7 @@ function vSettings(){
   +fld('Nama penandatangan (Yang Menyerahkan)',inp('signer',D.signer))+fld('Jabatan',inp('signerTitle',D.signerTitle))
   +fld('Rekening pembayaran (baris yang diawali "Rekening" ditebalkan)',txa('banks',D.banks,6),'full')
   +fld('Notes di bawah invoice (satu poin per baris, {DUE} = tanggal pelunasan, dicetak merah)',txa('notes',D.notes,6),'full')
+  +fld('Notes untuk program China (dipakai bila Daftar notes = Program China, atau Otomatis dengan format Program China)',txa('notesChn',D.notesChn,6),'full')
   +fld('Syarat & ketentuan (halaman 2 invoice)',txa('terms',D.terms,12),'full')
   +'</div><p class="hint" style="margin:10px 0 0">Format nomor: '+esc(D.invPrefix||'INV-')+(num(D.invStart)||1)+', naik otomatis satu per invoice. Judul bagian berhuruf kapital (mis. SYARAT & KETENTUAN:) otomatis dicetak tebal.</p></div></div>'
   +'<div class="card"><div class="ch"><h2>Data</h2></div><div class="cb"><div class="row"><button class="btn" data-act="backup">Unduh cadangan (JSON)</button><button class="btn" data-act="restore">Pulihkan dari cadangan</button><button class="btn" data-act="seed">Isi data contoh</button><button class="btn danger" data-act="unseed">Hapus data contoh</button></div><p class="hint" style="margin:10px 0 0">Data contoh ditandai khusus sehingga bisa dihapus tanpa menyentuh data asli. Pulihkan dari cadangan menimpa dokumen dengan ID yang sama.</p></div></div>';
