@@ -1179,7 +1179,7 @@ function openDepForm(id){
   D.tl=D.tl||{};if(D.quota===undefined)D.quota=0;if(!D.parentId)D.parentId='';
   const hasKids=!!(id&&depKids(id).length);
   const parents=Object.entries(S.departures).filter(([k,d])=>k!==id&&groupOf(k)===k).sort((a,b)=>(a[1].departDate||'').localeCompare(b[1].departDate||''));
-  FORM={D,modal:true};
+  FORM={D,modal:true,lastParent:D.parentId,onChange:()=>{if(FORM.lastParent!==D.parentId){FORM.lastParent=D.parentId;if(D.parentId&&!Object.values(D.tl).some(v=>v))copyTL(true)}}};
   openModal('<div class="sh"><h2>'+(id?'Ubah keberangkatan':'Keberangkatan baru')+'</h2><button class="x" data-act="close" aria-label="Tutup">&times;</button></div><div class="sb">'
   +'<fieldset><legend>Keberangkatan</legend><div class="fgrid">'
   +fld('Nama tour *',inp('name',D.name,{ph:'TOUR 3 NEGARA ASIA'}),'span2')+fld('Tanggal berangkat *',inp('departDate',D.departDate,{type:'date'}))+fld('Tanggal pulang *',inp('returnDate',D.returnDate,{type:'date'}))
@@ -1187,11 +1187,19 @@ function openDepForm(id){
   +(hasKids?'<div class="fld"><span>Induk keberangkatan</span><div class="hint" style="padding-top:8px">Ini keberangkatan induk: program turunannya memakai kuota ini.</div></div>':fld('Induk keberangkatan (berbagi kuota)',sel('parentId',D.parentId,[['','Tidak ada (keberangkatan induk / mandiri)']].concat(parents.map(([k,d])=>[k,d.name+' · '+rangeShort(d.departDate,d.returnDate)]))))
   )
   +fld('Catatan (tampil di rekap)',txa('notes',D.notes,2),'full')+'</div><p class="hint" style="margin:8px 0 0">Contoh: 3 Negara 7D6N sebagai induk dengan kuota 30. Lalu 2 Negara 4D3N dan 5D4N memilih induk tersebut, sehingga ketiganya memakai 30 kursi yang sama. Kuota di program turunan diabaikan.</p></fieldset>'
-  +'<fieldset><legend>Tour leader</legend><div class="fgrid">'
+  +'<fieldset><legend>Tour leader</legend>'+(hasKids?'':'<div class="bulk" style="margin:0 0 8px"><button class="btn" type="button" data-act="tl-copy">Salin tour leader dari induk</button><span class="hint">Menyalin nama, paspor, dan data flight dari keberangkatan induk. Lalu ubah flight pulang bila berbeda.</span></div>')+'<div class="fgrid">'
   +fld('Nama tour leader',inp('tl.name',D.tl.name),'span2')+fld('No. paspor',inp('tl.idNo',D.tl.idNo))+fld('Tanggal lahir',inp('tl.birth',D.tl.birth,{type:'date'}))+fld('Paspor berlaku sampai',inp('tl.expiry',D.tl.expiry,{type:'date'}))+fld('Kewarganegaraan',inp('tl.nat',D.tl.nat,{ph:'INDONESIA'}))
   +fld('Flight berangkat',inp('tl.flOut',D.tl.flOut))+fld('Rute berangkat',inp('tl.flOutRoute',D.tl.flOutRoute),'span2')+fld('Flight pulang',inp('tl.flIn',D.tl.flIn))+fld('Rute pulang',inp('tl.flInRoute',D.tl.flInRoute),'span2')
   +fld('Kode book (PNR)',inp('tl.pnr',D.tl.pnr))+fld('Bagasi',inp('tl.bag',D.tl.bag))
   +'</div></fieldset></div><div class="sf"><span class="err" id="ferr"></span>'+(id?'<button class="btn danger" data-act="del-dep" data-id="'+id+'" style="margin-right:auto">Hapus</button>':'')+'<button class="btn" data-act="close">Batal</button><button class="btn primary" data-act="save-dep" data-id="'+(id||'')+'">Simpan</button></div>','wide');
+}
+function copyTL(quiet){
+  const D=FORM.D,par=S.departures[D.parentId];
+  if(!par){if(!quiet)toast('Pilih dulu induk keberangkatannya');return}
+  const src=par.tl||{};if(!Object.values(src).some(v=>v)){if(!quiet)toast('Tour leader di induk masih kosong');return}
+  D.tl={...src};
+  document.querySelectorAll('[data-f^="tl."]').forEach(e=>{const k=e.dataset.f.slice(3);e.value=D.tl[k]==null?'':D.tl[k]});
+  ui.dirty=true;if(!quiet)toast('Data tour leader disalin dari '+par.name);
 }
 async function saveDep(id){
   const D=FORM.D,err=m=>{$('#ferr').textContent=m};
@@ -1448,6 +1456,7 @@ document.addEventListener('click',async e=>{
     case 'xlsx-one':exportRekap([id],false);break;
     case 'xlsx-sel':exportRekap(Object.keys(ui.sel).filter(k=>ui.sel[k]));break;
     case 'rooms':openRooms(id);break;
+    case 'tl-copy':copyTL();break;
     case 'room-add':FORM.D.rooms.push({id:uid(),type:'TWIN',family:'',note:'',pids:['','']});FORM.rerender();break;
     case 'room-addp':FORM.D.rooms[i].pids.push('');FORM.rerender();break;
     case 'room-rm':FORM.D.rooms.splice(i,1);FORM.rerender();break;
