@@ -339,6 +339,9 @@ const ICON={
 const NAV=[['dashboard','Dashboard'],['booking','Booking & Invoice'],['rekap','Rekap Keberangkatan'],['pelanggan','Pelanggan'],['katalog','Katalog Layanan'],['laporan','Laporan'],['pengguna','Pengguna'],['pengaturan','Pengaturan']];
 
 /* ============ Perhitungan ============ */
+const isChn=b=>b.taxFmt==='row';
+const discLabel=(b,agent)=>b.discMode==='after'?'Agen Komisi':(agent?'Agent Discount':'Diskon');
+const pctS=v=>String(num(v)).replace('.',',');
 function calc(b){
   const items=b.items||[],pax=paxOf(b);
   const paxTotal=pax.reduce((a,p)=>a+pxPrice(b,p),0);
@@ -349,11 +352,12 @@ function calc(b){
   const gross=subtotal+tips;
   const discount=num(b.discount);
   const base=Math.max(0,subtotal-discount);
-  const tax=Math.round(base*num(b.taxPct)/100);
+  const taxBase=(b.discMode==='after'?subtotal:base)+(String(b.tipsTaxable)==='1'?tips:0);
+  const tax=Math.round(taxBase*num(b.taxPct)/100);
   const admin=num(b.adminFee);
   const total=base+tax+admin+tips;
   const paid=(b.payments||[]).reduce((a,p)=>a+num(p.amount),0);
-  return {paxTotal,itemsTotal,subtotal,tips,gross,cost,discount,base,tax,admin,total,paid,balance:total-paid,margin:base-cost+admin};
+  return {paxTotal,itemsTotal,subtotal,tips,gross,cost,discount,base,taxBase,tax,admin,total,paid,balance:total-paid,margin:base-cost+admin};
 }
 function billRows(b){
   const R=[],pax=paxOf(b);
@@ -749,8 +753,8 @@ function vDetail(id){
   +'<div class="main"><div class="card"><div class="ch"><h2>Ringkasan tagihan</h2></div><div class="cb sumbox">'
   +'<div><span class="mut">Subtotal</span><span class="num">'+rp(c.subtotal)+'</span></div>'
   +(c.tips?'<div><span class="mut">Tips (non pajak)</span><span class="num">'+rp(c.tips)+'</span></div>':'')
-  +(c.discount?'<div><span class="mut">Diskon / agent discount</span><span class="num">-'+rp(c.discount)+'</span></div>':'')
-  +(c.tax?'<div><span class="mut">Pajak '+num(b.taxPct)+'%</span><span class="num">'+rp(c.tax)+'</span></div>':'')
+  +(c.discount?'<div><span class="mut">'+discLabel(b,true)+'</span><span class="num">-'+rp(c.discount)+'</span></div>':'')
+  +(c.tax?'<div><span class="mut">Pajak '+pctS(b.taxPct)+'%</span><span class="num">'+rp(c.tax)+'</span></div>':'')
   +(c.admin?'<div><span class="mut">Biaya admin</span><span class="num">'+rp(c.admin)+'</span></div>':'')
   +'<div class="tot"><span>Total</span><span class="num">'+rp(c.total)+'</span></div>'
   +'<div><span class="mut">Sudah dibayar</span><span class="num">'+rp(c.paid)+'</span></div>'
@@ -836,9 +840,12 @@ function bookingBody(D,editing){
     +fld('Harga jual',inp('items.'+i+'.price',nz(it.price),{type:'number',min:0,ph:'0'}))
     +fld('Harga modal (opsional)',inp('items.'+i+'.cost',nz(it.cost),{type:'number',min:0,ph:'0'}))
     +'<button class="btn sm danger" type="button" data-act="rm-item" data-i="'+i+'">Hapus</button></div>').join('')
-  +'</div><div style="margin-top:8px"><button class="btn sm" type="button" data-act="add-item">+ Tambah biaya</button></div></fieldset>'
+  +'</div><div style="margin-top:8px"><button class="btn sm" type="button" data-act="add-item">+ Tambah biaya</button> <button class="btn sm" type="button" data-act="add-fs">+ Fuel Surcharge</button> <button class="btn sm" type="button" data-act="add-visa">+ Visa Group</button></div></fieldset>'
   +'<fieldset><legend>Pajak, tanggal, dan catatan</legend><div class="fgrid">'
-  +fld('Biaya admin / service (Rp)',inp('adminFee',nz(D.adminFee),{type:'number',min:0,ph:'0'}))+fld('Pajak (%)',inp('taxPct',nz(D.taxPct),{type:'number',min:0,ph:'0'}))
+  +fld('Biaya admin / service (Rp)',inp('adminFee',nz(D.adminFee),{type:'number',min:0,ph:'0'}))+fld('Pajak (%)',inp('taxPct',nz(D.taxPct),{type:'number',min:0,step:'0.1',ph:'0'}))
+  +fld('Potongan agen',sel('discMode',D.discMode||'before',[['before','Agent discount: mengurangi dasar pajak'],['after','Agen komisi: dipotong setelah pajak']]))
+  +fld('Tips ikut dasar pajak?',sel('tipsTaxable',String(D.tipsTaxable)==='1'?'1':'0',[['0','Tidak (tips non pajak)'],['1','Ya, tips ikut dikenai pajak']]))
+  +fld('Format invoice',sel('taxFmt',D.taxFmt||'std',[['std','Standar (Total Bersih)'],['row','Program China (pajak sebagai baris, Pelunasan)']]),'span2')
   +fld('Tanggal invoice',inp('invoiceDate',D.invoiceDate,{type:'date'}))+fld('Pelunasan paling lambat',inp('dueDate',D.dueDate,{type:'date'}))
   +fld('Catatan tambahan di invoice',txa('notes',D.notes,2),'full')
   +'</div></fieldset>'
@@ -864,8 +871,8 @@ function updateSummary(){
   +(c.itemsTotal?'<div><span class="mut">Biaya tambahan</span><span class="num">'+rp(c.itemsTotal)+'</span></div>':'')
   +(c.tips?'<div><span class="mut">Tips (non pajak)</span><span class="num">'+rp(c.tips)+'</span></div>':'')
   +'<div><span class="mut">Total pembayaran</span><span class="num">'+rp(c.gross)+'</span></div>'
-  +(c.discount?'<div><span class="mut">Agent discount</span><span class="num">-'+rp(c.discount)+'</span></div>':'')
-  +(c.tax?'<div><span class="mut">Pajak '+num(D.taxPct)+'%</span><span class="num">'+rp(c.tax)+'</span></div>':'')
+  +(c.discount?'<div><span class="mut">'+discLabel(D,true)+'</span><span class="num">-'+rp(c.discount)+'</span></div>':'')
+  +(c.tax?'<div><span class="mut">Pajak '+pctS(D.taxPct)+'%</span><span class="num">'+rp(c.tax)+'</span></div>':'')
   +(c.admin?'<div><span class="mut">Biaya admin</span><span class="num">'+rp(c.admin)+'</span></div>':'')
   +'<div class="tot"><span>Total bersih</span><span class="num">'+rp(c.total)+'</span></div>'
   +(dp>0?'<div><span class="mut">DP dicatat</span><span class="num">'+rp(dp)+'</span></div><div><span class="mut">Sisa pembayaran</span><span class="num">'+rp(c.total-dp)+'</span></div>':'')
@@ -994,14 +1001,22 @@ function invoiceHTML(id){
       +'<td class="r">'+(p&&priced?fnum(pr):'')+'</td><td class="c">'+(p&&priced?1:'')+'</td><td class="r">'+(p&&priced?fnum(pr):'')+'</td></tr>';
   });
   (b.items||[]).forEach(i=>{rows+='<tr><td></td><td>'+esc(i.desc)+'</td><td></td><td></td><td class="r">'+fnum(i.price)+'</td><td class="c">'+num(i.qty)+'</td><td class="r">'+fnum(num(i.qty)*num(i.price))+'</td></tr>'});
-  if(num(b.tipsPerPax)&&pax.length)rows+='<tr><td></td><td>Tips <small>(non pajak)</small></td><td></td><td></td><td class="r">'+fnum(b.tipsPerPax)+'</td><td class="c">'+pax.length+'</td><td class="r">'+fnum(c.tips)+'</td></tr>';
+  if(isChn(b)){if(c.admin)rows+='<tr><td></td><td>Biaya Admin</td><td></td><td></td><td class="r">'+fnum(c.admin)+'</td><td class="c">1</td><td class="r">'+fnum(c.admin)+'</td></tr>';if(c.tax){const pn=pax.length,per=pn>0&&c.tax%pn===0;rows+='<tr><td></td><td>Tax '+pctS(b.taxPct)+'%</td><td></td><td></td><td class="r">'+fnum(per?c.tax/pn:c.tax)+'</td><td class="c">'+(per?pn:1)+'</td><td class="r">'+fnum(c.tax)+'</td></tr>'}}
+  if(num(b.tipsPerPax)&&pax.length)rows+='<tr><td></td><td>Tips'+(String(b.tipsTaxable)==='1'||isChn(b)?'':' <small>(non pajak)</small>')+'</td><td></td><td></td><td class="r">'+fnum(b.tipsPerPax)+'</td><td class="c">'+pax.length+'</td><td class="r">'+fnum(c.tips)+'</td></tr>';
   const tr=(l,v,cls)=>'<tr class="tt '+(cls||'')+'"><td colspan="6" class="r">'+l+'</td><td class="r">'+v+'</td></tr>';
-  let T=tr('Total Pembayaran',fnum(c.gross),'b');
-  const adj=c.discount||c.tax||c.admin;
-  if(c.discount)T+=tr(cu.type==='Agen / Mitra'?'Agent Discount':'Diskon',fnum(c.discount));
-  if(c.tax)T+=tr('Pajak '+num(b.taxPct)+'%',fnum(c.tax));
-  if(c.admin)T+=tr('Biaya Admin',fnum(c.admin));
-  if(adj)T+=tr('Total Bersih',fnum(c.total),'b red');
+  const dl=discLabel(b,cu.type==='Agen / Mitra');let T;
+  if(isChn(b)){
+    T=tr('Total Pembayaran',fnum(c.total+c.discount),'b');
+    if(c.discount)T+=tr(dl,fnum(c.discount));
+    T+=tr('Pelunasan',fnum(c.total),'b red');
+  }else{
+    T=tr('Total Pembayaran',fnum(c.gross),'b');
+    const adj=c.discount||c.tax||c.admin;
+    if(c.discount)T+=tr(dl,fnum(c.discount));
+    if(c.tax)T+=tr('Pajak '+pctS(b.taxPct)+'%',fnum(c.tax));
+    if(c.admin)T+=tr('Biaya Admin',fnum(c.admin));
+    if(adj)T+=tr('Total Bersih',fnum(c.total),'b red');
+  }
   (b.payments||[]).forEach((p,i)=>{T+=tr(esc(payLabel(b,i))+' <small>('+fmtDate(p.date)+')</small>',fnum(Math.abs(num(p.amount))),'b')});
   if(b.status!=='cancelled')T+=c.balance>0?tr('Sisa Pembayaran',fnum(c.balance),'b red'):tr('LUNAS','','b okk');
   const notes=String(st.notes||'').split('\n').map(x=>x.trim()).filter(Boolean).map(l=>'<li'+(l.includes('{DUE}')?' class="red"':'')+'>'+esc(l.replace('{DUE}',fmtLong(b.dueDate)))+'</li>');
@@ -1044,7 +1059,7 @@ function invoiceText(id){
   }else if(pax.length)L.push('- Peserta: '+pax.length+' pax');
   (b.items||[]).forEach(i=>L.push('- '+i.desc+' ('+num(i.qty)+' x '+rp(i.price)+') = '+rp(num(i.qty)*num(i.price))));
   if(c.tips)L.push('- Tips (non pajak) '+pax.length+' x '+rp(b.tipsPerPax)+' = '+rp(c.tips));
-  if(c.discount)L.push('Diskon: -'+rp(c.discount));if(c.tax)L.push('Pajak '+num(b.taxPct)+'%: '+rp(c.tax));if(c.admin)L.push('Biaya admin: '+rp(c.admin));
+  if(c.discount)L.push(discLabel(b,false)+': -'+rp(c.discount));if(c.tax)L.push('Pajak '+pctS(b.taxPct)+'%: '+rp(c.tax));if(c.admin)L.push('Biaya admin: '+rp(c.admin));
   L.push('','*Total: '+rp(c.total)+'*');if(c.paid)L.push('Sudah dibayar: '+rp(c.paid));
   L.push(c.balance>0?'*Sisa tagihan: '+rp(c.balance)+'*':'Status: LUNAS');
   if(c.balance>0&&b.dueDate)L.push('Pelunasan paling lambat: '+fmtLong(b.dueDate));
@@ -1623,6 +1638,7 @@ document.addEventListener('click',async e=>{
     case 'save-booking':saveBooking();break;
     case 'add-pass':FORM.D.passengers.push({name:'',type:'Dewasa',idNo:'',note:''});FORM.rerender();break;
     case 'rm-pass':FORM.D.passengers.splice(i,1);FORM.rerender();break;
+    case 'add-fs':case 'add-visa':{const q=Math.max(1,paxOf(FORM.D).length);FORM.D.items.push({catId:'',desc:a==='add-fs'?'Fuel Surcharge':'Visa Group',type:a==='add-fs'?'Lainnya':'Visa & Dokumen',qty:q,price:0,cost:0});FORM.rerender();break}
     case 'add-item':FORM.D.items.push({catId:'',desc:'',type:'Tiket Pesawat',qty:1,price:0,cost:0});FORM.rerender();break;
     case 'rm-item':if(FORM.D.items.length>1){FORM.D.items.splice(i,1);FORM.rerender()}break;
     case 'del-booking':if(armed(el)){await safe(async()=>{await del('bookings',id);ui.bookingId=null;toast('Booking dihapus');render(true)})}break;
