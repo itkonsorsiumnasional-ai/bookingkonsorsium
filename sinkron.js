@@ -3,12 +3,12 @@
    Selama masih "ISI", aplikasi tetap berjalan di mode lokal (data hanya di browser). */
 (function(){
   var FIREBASE_CONFIG = {
-    apiKey: "ISI",
-    authDomain: "ISI",
-    projectId: "ISI",
-    storageBucket: "ISI",
-    messagingSenderId: "ISI",
-    appId: "ISI"
+    apiKey: "AIzaSyCYwI-We7TLn-TH08EIw7ebNkKv3wf2hUo",
+    authDomain: "kn-booking.firebaseapp.com",
+    projectId: "kn-booking",
+    storageBucket: "kn-booking.firebasestorage.app",
+    messagingSenderId: "109592597882",
+    appId: "1:109592597882:web:cfdfd825213fe83864f2c3"
   };
   if(!FIREBASE_CONFIG.projectId || FIREBASE_CONFIG.projectId==="ISI" || !window.firebase) return;
   var db;
