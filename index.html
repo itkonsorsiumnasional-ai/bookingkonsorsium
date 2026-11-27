@@ -826,7 +826,7 @@ function vDetail(id){
   +'<div class="tot"><span>Total</span><span class="num">'+rp(c.total)+'</span></div>'
   +'<div><span class="mut">Sudah dibayar</span><span class="num">'+rp(c.paid)+'</span></div>'
   +(nb?'':(c.balance>0?'<div class="due"><span>Sisa tagihan</span><span class="num">'+rp(c.balance)+'</span></div>':'<div class="lunas"><span>Lunas</span><span class="num">'+(c.balance<0?'lebih bayar '+rp(-c.balance):'')+'</span></div>'))
-  +'<div style="margin-top:6px"><span class="mut small">Estimasi margin</span><span class="num small">'+rp(c.margin)+'</span></div></div></div>'
+  +'</div></div>'
   +'<div class="card"><div class="cb row"><button class="btn" data-act="copy-wa" data-id="'+id+'">Salin teks untuk WhatsApp</button><button class="btn" data-act="dl-invoice" data-id="'+id+'">Unduh invoice</button><button class="btn danger" data-act="del-booking" data-id="'+id+'">Hapus booking</button></div></div></div></div>';
 }
 
@@ -879,7 +879,6 @@ function bookingBody(D,editing){
   +fld('Harga paket per orang (Rp)',inp('pkgPrice',nz(D.pkgPrice),{type:'number',min:0,ph:'0'}))
   +fld('Tips per orang, non pajak (Rp)',inp('tipsPerPax',nz(D.tipsPerPax),{type:'number',min:0,ph:'0'}))
   +fld('Agent discount / diskon total (Rp)',inp('discount',nz(D.discount),{type:'number',min:0,ph:'0'}))
-  +fld('Harga modal per orang (opsional)',inp('pkgCost',nz(D.pkgCost),{type:'number',min:0,ph:'0'}))
   +'</div><p class="hint" style="margin:8px 0 0">Setiap peserta otomatis memakai harga paket. Kosongkan kolom harga peserta untuk memakai harga paket, atau isi harga sendiri untuk anak, bayi, atau single.</p></fieldset>'
   +'<fieldset><legend>Penerbangan grup (berlaku untuk semua peserta kecuali diisi sendiri)</legend><div class="fgrid">'
   +fld('Flight berangkat',inp('fl.out',D.fl.out,{ph:'QZ324'}))+fld('Rute berangkat',inp('fl.outRoute',D.fl.outRoute,{ph:'SUB 07.00-KUL 10.35'}),'span2')
@@ -905,7 +904,6 @@ function bookingBody(D,editing){
     +fld('Kategori',sel('items.'+i+'.type',it.type,CATS))
     +fld('Qty',inp('items.'+i+'.qty',it.qty,{type:'number',min:0,step:'1'}))
     +fld('Harga jual',inp('items.'+i+'.price',nz(it.price),{type:'number',min:0,ph:'0'}))
-    +fld('Harga modal (opsional)',inp('items.'+i+'.cost',nz(it.cost),{type:'number',min:0,ph:'0'}))
     +'<button class="btn sm danger" type="button" data-act="rm-item" data-i="'+i+'">Hapus</button></div>').join('')
   +'</div><div style="margin-top:8px"><button class="btn sm" type="button" data-act="add-item">+ Tambah biaya</button> <button class="btn sm" type="button" data-act="add-fs">+ Fuel Surcharge</button> <button class="btn sm" type="button" data-act="add-visa">+ Visa Group</button></div></fieldset>'
   +'<fieldset><legend>Pajak, tanggal, dan catatan</legend><div class="fgrid">'
@@ -925,11 +923,11 @@ function updateQuota(){
   if(!D.departureId||!S.departures[D.departureId]){el.innerHTML='';return}
   const q=quotaInfo(D.departureId);
   if(!q.has){el.innerHTML='<div class="hint">Kuota keberangkatan ini belum diatur (Rekap Keberangkatan &gt; Atur kuota).</div>';return}
-  const old=D.id&&S.bookings[D.id]&&S.bookings[D.id].status!=='cancelled'&&groupOf(S.bookings[D.id].departureId||'')===q.root?paxOf(S.bookings[D.id]).length:0;
-  const mine=D.status==='cancelled'?0:paxOf(D).length;
-  const left=q.quota-(q.used-old)-mine,gn=S.departures[q.root].name;
-  el.innerHTML=left<0?'<div class="banner" style="background:var(--red-soft);color:var(--red)">Melebihi kuota '+esc(gn)+': kurang '+(-left)+' kursi ('+(q.used-old+mine)+' peserta dari kuota '+q.quota+'). Booking tetap bisa disimpan, tetapi tambah kuota atau kurangi peserta.</div>'
-    :'<div class="banner" style="'+(left===0?'':'background:var(--ok-soft);color:var(--ok)')+'">Kuota '+esc(gn)+(q.parts.length>1?' (dipakai bersama '+q.parts.length+' program)':'')+': sisa '+left+' kursi setelah booking ini ('+(q.used-old+mine)+' dari '+q.quota+' terisi).</div>';
+  const gn=S.departures[q.root].name,others=groupSeats(q.root,D.id||null),mine=holdsSeat(D)?paxOf(D).length:0,left=q.quota-others-mine;
+  if(!holdsSeat(D)){el.innerHTML='<div class="banner">Status '+esc(BSTAT[D.status]||D.status)+' tidak memakai kursi. Sisa kuota '+esc(gn)+' saat ini: '+(q.quota-others)+' kursi (hanya booking Dikonfirmasi dan Selesai yang mengurangi kuota).</div>';return}
+  const old=others,used=others+mine;
+  el.innerHTML=left<0?'<div class="banner" style="background:var(--red-soft);color:var(--red)">Kursi tidak cukup di '+esc(gn)+': sisa '+Math.max(0,q.quota-others)+' kursi, booking ini '+mine+' peserta. Tidak bisa disimpan sebagai Dikonfirmasi.</div>'
+    :'<div class="banner" style="'+(left===0?'':'background:var(--ok-soft);color:var(--ok)')+'">Kuota '+esc(gn)+(q.parts.length>1?' (dipakai bersama '+q.parts.length+' program)':'')+': sisa '+left+' kursi setelah booking ini ('+used+' dari '+q.quota+' terisi).</div>';
 }
 function updateSummary(){
   updateQuota();
@@ -942,7 +940,7 @@ function updateSummary(){
   :'<div><span class="mut">Total pembayaran</span><span class="num">'+rp(c.gross)+'</span></div>'+(c.discount?'<div><span class="mut">'+discLabel(D,true)+'</span><span class="num">-'+rp(c.discount)+'</span></div>':'')+(c.tax?'<div><span class="mut">Pajak '+pctS(D.taxPct)+'%</span><span class="num">'+rp(c.tax)+'</span></div>':'')+(c.admin?'<div><span class="mut">Biaya admin</span><span class="num">'+rp(c.admin)+'</span></div>':''))
   +'<div class="tot"><span>'+(isChn(D)?'Pelunasan':'Total bersih')+'</span><span class="num">'+rp(c.total)+'</span></div>'
   +(dp>0?'<div><span class="mut">DP dicatat</span><span class="num">'+rp(dp)+'</span></div><div><span class="mut">Sisa pembayaran</span><span class="num">'+rp(c.total-dp)+'</span></div>':'')
-  +'<div><span class="mut small">Estimasi margin</span><span class="num small">'+rp(c.margin)+'</span></div>';
+  +'';
 }
 function genCode(){
   const A='ABCDEFGHJKLMNPQRSTUVWXYZ';const used=new Set(Object.values(S.bookings).map(b=>b.code));
@@ -959,6 +957,7 @@ async function saveBooking(){
   if(items.some(i=>num(i.qty)<=0))return err('Jumlah (qty) biaya tambahan harus lebih dari 0.');
   if(D.departDate&&D.returnDate&&D.returnDate<D.departDate)return err('Tanggal pulang tidak boleh sebelum tanggal berangkat.');
   if(!D.invoiceDate)return err('Tanggal invoice wajib diisi.');
+  {const g=seatGuard({...D,passengers:pax},D.id||null);if(g)return err(g)}
   await safe(async()=>{
     let cid=D.customerId;
     if(cid==='__new'){cid=uid();await put('customers',cid,{name:D.newCust.name.trim(),type:'Agen / Mitra',phone:D.newCust.phone,email:D.newCust.email,address:'',idNo:'',notes:'',createdAt:Date.now()})}
@@ -973,7 +972,15 @@ async function saveBooking(){
       if(D.dp&&num(D.dp.amount)>0)rec.payments.push({id:uid(),date:D.dp.date||rec.invoiceDate,method:D.dp.method,amount:num(D.dp.amount),ref:D.dp.ref||'',note:'Pembayaran awal / DP'});
     }
     {const m=stamp();rec.updatedBy=m.by;rec.updatedByName=m.byName;rec.updatedAt=Date.now()}
+    const prev=D.id?S.bookings[D.id]:null;
+    if(holdsSeat(rec)&&(!prev||!holdsSeat(prev)||prev.departureId!==rec.departureId||paxOf(rec).length>paxOf(prev).length))rec.seatAt=Date.now();
+    else rec.seatAt=(prev&&prev.seatAt)||rec.createdAt||Date.now();
+    const prevCopy=prev?clone(prev):null;
     await put('bookings',id,rec);
+    if(!(await seatVerify(id,rec))){
+      if(prevCopy)await put('bookings',id,prevCopy);else await del('bookings',id);
+      err('Kursi baru saja diambil booking lain. Kuota sudah penuh, booking ini tidak disimpan. Muat ulang dan cek sisa kursi.');return;
+    }
     closeModal();ui.route='booking';ui.bookingId=id;try{history.replaceState(null,'','#booking')}catch(e){}render(true);window.scrollTo(0,0);
     toast(D.id?'Booking diperbarui':'Booking dan invoice dibuat: '+rec.invoiceNo);
   });
@@ -1198,9 +1205,33 @@ function depStats(id){
 function depKids(id){return Object.entries(S.departures).filter(([k,d])=>d.parentId===id).sort((a,b)=>(a[1].returnDate||'').localeCompare(b[1].returnDate||'')||(a[1].name||'').localeCompare(b[1].name||''))}
 function groupOf(id){const d=S.departures[id];return d&&d.parentId&&S.departures[d.parentId]&&!S.departures[d.parentId].parentId?d.parentId:id}
 function groupIds(root){return [root].concat(depKids(root).map(x=>x[0]))}
+const holdsSeat=b=>!!b&&(b.status==='confirmed'||b.status==='completed');
+function seatsIn(depId,exceptId){return Object.entries(S.bookings).filter(([id,b])=>id!==exceptId&&b.departureId===depId&&holdsSeat(b)).reduce((a,[id,b])=>a+paxOf(b).length,0)}
+function groupSeats(root,exceptId){return groupIds(root).reduce((a,k)=>a+seatsIn(k,exceptId),0)}
+/* Mengembalikan pesan galat bila booking ini membuat kursi melebihi kuota, kosong bila aman */
+function seatGuard(rec,id){
+  if(!holdsSeat(rec)||!rec.departureId||!S.departures[rec.departureId])return '';
+  const q=quotaInfo(rec.departureId);if(!q.has)return '';
+  const left=q.quota-groupSeats(q.root,id),mine=paxOf(rec).length,gn=S.departures[q.root].name;
+  if(mine<=left)return '';
+  return left<=0?'Kursi '+gn+' sudah penuh ('+q.quota+' kursi terisi). Booking tidak bisa disimpan sebagai Dikonfirmasi. Simpan sebagai Draft, atau tambah kuota di Rekap Keberangkatan.'
+    :'Sisa kursi '+gn+' tinggal '+left+', sedangkan booking ini '+mine+' peserta. Kurangi peserta menjadi maksimal '+left+', atau tambah kuota di Rekap Keberangkatan.';
+}
+/* Mode online: setelah menulis, cek ulang ke server. Bila dua orang menyimpan bersamaan, yang tersimpan belakangan ditolak. */
+async function seatVerify(id,rec){
+  if(S.mode!=='db'||!holdsSeat(rec)||!rec.departureId||!S.departures[rec.departureId])return true;
+  try{
+    const q=quotaInfo(rec.departureId);if(!q.has)return true;
+    const snap=await DBH.collection('bookings').where('departureId','in',groupIds(q.root)).get({source:'server'});
+    const L=[];snap.docs.forEach(d=>{const b=d.data();if(holdsSeat(b))L.push({id:d.id,n:paxOf(b).length,t:b.seatAt||b.createdAt||0})});
+    L.sort((a,b)=>a.t-b.t||(a.id<b.id?-1:1));
+    let c=0;for(const x of L){c+=x.n;if(x.id===id)return c<=q.quota}
+  }catch(e){}
+  return true;
+}
 function quotaInfo(id){
   const root=groupOf(id),ids=groupIds(root);
-  const parts=ids.map(k=>({id:k,name:S.departures[k].name,dur:durCode(S.departures[k].departDate,S.departures[k].returnDate),n:depPax(k).length}));
+  const parts=ids.map(k=>({id:k,name:S.departures[k].name,dur:durCode(S.departures[k].departDate,S.departures[k].returnDate),n:seatsIn(k)}));
   const used=parts.reduce((a,x)=>a+x.n,0),quota=num(S.departures[root].quota);
   return {root,quota,used,left:quota-used,parts,has:quota>0};
 }
@@ -1210,7 +1241,7 @@ function quotaCard(id){
   const bar=q.has?'<div style="height:10px;border-radius:6px;background:var(--line);overflow:hidden;margin:8px 0 12px"><div style="height:100%;width:'+Math.min(100,Math.round(q.used/q.quota*100))+'%;background:'+(q.left<0?'var(--red)':q.left===0?'var(--warn)':'var(--blue)')+'"></div></div>':'';
   return '<div class="card"><div class="ch"><h2>Kuota kursi'+(q.parts.length>1?' (dipakai bersama)':'')+'</h2>'+(kid?'':'<button class="btn sm" data-act="edit-dep" data-id="'+id+'">Atur kuota</button>')+'</div><div class="cb">'
    +(kid?'<p class="small mut" style="margin:0 0 8px">Berbagi kuota dengan <button class="linkbtn" data-act="goto-dep" data-id="'+q.root+'">'+esc(root.name)+' &rarr;</button></p>':'')
-   +(q.has?'<div class="row" style="justify-content:space-between"><span class="strong num">'+q.used+' dari '+q.quota+' kursi terisi</span>'+quotaPill(q)+'</div>'+bar:'<p class="mut small" style="margin:0 0 8px">Kuota belum diatur. '+(kid?'Atur di keberangkatan induk.':'Klik "Atur kuota".')+'</p>')
+   +(q.has?'<div class="row" style="justify-content:space-between"><span class="strong num">'+q.used+' dari '+q.quota+' kursi terisi</span>'+quotaPill(q)+'</div>'+bar+'<p class="small mut" style="margin:0 0 8px">Kursi berkurang saat booking berstatus Dikonfirmasi atau Selesai. Draft dan Dibatalkan tidak memakai kursi.</p>':'<p class="mut small" style="margin:0 0 8px">Kuota belum diatur. '+(kid?'Atur di keberangkatan induk.':'Klik "Atur kuota".')+'</p>')
    +'<div class="stack small" style="gap:6px">'+q.parts.map(p=>'<div class="row" style="justify-content:space-between"><span>'+(p.id===id?'<b>':'')+esc(p.name)+(p.dur?' '+esc(p.dur):'')+(p.id===id?'</b>':'')+'</span><span class="num">'+p.n+' peserta</span></div>').join('')+'</div></div></div>';
 }
 const hex=h=>'#'+h;
@@ -1742,7 +1773,7 @@ document.addEventListener('change',async e=>{
   else if(t.id==='fBy'){ui.fBy=t.value;updateList()}
   else if(t.id==='fCat'){ui.fCat=t.value;updateList()}
   else if(t.id==='repFrom'||t.id==='repTo'){ui[t.id]=t.value||ui[t.id];render(true)}
-  else if(t.id==='stSel'&&ui.bookingId){await safe(async()=>{const b=clone(S.bookings[ui.bookingId]);b.status=t.value;{const m=stamp();b.updatedBy=m.by;b.updatedByName=m.byName;b.updatedAt=Date.now()}await put('bookings',ui.bookingId,b);toast('Status diubah ke '+BSTAT[t.value])})}
+  else if(t.id==='stSel'&&ui.bookingId){await safe(async()=>{const b=clone(S.bookings[ui.bookingId]),before=clone(S.bookings[ui.bookingId]);b.status=t.value;{const g=seatGuard(b,ui.bookingId);if(g){toast(g);render(true);return}}if(holdsSeat(b)&&!holdsSeat(before))b.seatAt=Date.now();{const m=stamp();b.updatedBy=m.by;b.updatedByName=m.byName;b.updatedAt=Date.now()}await put('bookings',ui.bookingId,b);if(!(await seatVerify(ui.bookingId,b))){await put('bookings',ui.bookingId,before);toast('Kursi baru saja diambil booking lain. Status dikembalikan.');render(true);return}toast('Status diubah ke '+BSTAT[t.value])})}
   else if(t.id==='logoFile'){const f=t.files[0];if(!f||!FORM||!FORM.settings)return;const img=new Image(),u=URL.createObjectURL(f);img.onload=()=>{const k=Math.min(1,600/img.width),cv=document.createElement('canvas');cv.width=Math.round(img.width*k);cv.height=Math.round(img.height*k);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);FORM.D.logo=cv.toDataURL('image/png');ui.dirty=true;const im=$('#logoPrev');if(im){im.src=FORM.D.logo;im.hidden=false}URL.revokeObjectURL(u)};img.onerror=()=>toast('Gambar tidak bisa dibaca');img.src=u;t.value=''}
   else if(t.dataset&&t.dataset.dep!==undefined&&FORM){const dep=S.departures[FORM.D.departureId];if(dep){const D=FORM.D;if(!(D.destination||'').trim())D.destination=dep.name;if(dep.departDate)D.departDate=dep.departDate;if(dep.returnDate)D.returnDate=dep.returnDate}FORM.rerender()}
   else if(t.dataset&&t.dataset.pkgpick!==undefined&&FORM){const c=S.catalog[t.value];if(c){const D=FORM.D;D.pkgPrice=num(c.price);D.pkgCost=num(c.cost);if(!(D.destination||'').trim())D.destination=c.name}FORM.rerender()}
