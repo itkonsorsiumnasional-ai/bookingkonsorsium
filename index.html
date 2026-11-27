@@ -195,6 +195,7 @@ table.t td.num{white-space:nowrap}
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="sinkron.js?v=3"></script>
 <script>
 /* ============ Util ============ */
@@ -388,6 +389,15 @@ function nextSeq(stemFn,field){
   for(const b of Object.values(S.bookings)){const v=b[field];if(v&&v.startsWith(stem)){max=Math.max(max,parseInt(v.slice(stem.length))||0)}}
   return stem+String(max+1).padStart(4,'0');
 }
+async function allocInvoiceNo(d){
+  const local=nextInvoiceNo(d);
+  if(S.mode!=='db'||!DBH||!DBH.runTransaction)return local;
+  try{
+    const pre=S.settings.invPrefix||'INV-',tail=local.slice(pre.length),ref=DBH.doc('meta/invoiceSeq');
+    const n=await DBH.runTransaction(async tx=>{const sn=await tx.get(ref);const cur=sn.exists?num(sn.data().n):0;const nx=Math.max(cur+1,parseInt(tail,10)||0);tx.set(ref,{n:nx});return nx});
+    return pre+String(n).padStart(tail.length,'0');
+  }catch(e){return local}
+}
 function nextInvoiceNo(dateISO){const pre=S.settings.invPrefix||'INV-';let max=0;for(const b of Object.values(S.bookings)){const v=b.invoiceNo;if(v&&v.startsWith(pre)){const n=parseInt(v.slice(pre.length),10);if(isFinite(n)&&String(n)===v.slice(pre.length))max=Math.max(max,n)}}return pre+(max?max+1:(num(S.settings.invStart)||1))}
 function nextCode(dateISO){return genCode()}
 const custName=id=>(S.customers[id]&&S.customers[id].name)||'(pelanggan dihapus)';
@@ -410,8 +420,9 @@ async function del(col,id){
 }
 function subscribe(){
   const timer=setTimeout(()=>{if(!S.loaded){S.slow=true;render()}},10000);
-  const check=()=>{if(COLS.every(c=>S.got[c])&&S.got.config&&!S.loaded){S.loaded=true;clearTimeout(timer)}};
-  COLS.forEach(col=>{
+  const cols=COLS.filter(c=>c!=='expenses'||!S.authMode||isAdmin());
+  const check=()=>{if(cols.every(c=>S.got[c])&&S.got.config&&!S.loaded){S.loaded=true;clearTimeout(timer)}};
+  cols.forEach(col=>{
     DBH.collection(col).onSnapshot(snap=>{const m={};snap.docs.forEach(d=>{m[d.id]=d.data()});S[col]=m;S.got[col]=true;check();sched()},e=>{S.err=e&&e.code;S.loaded=true;sched()});
   });
   DBH.doc('config/company').onSnapshot(s=>{S.settings=normSet(s.exists?s.data():{});S.got.config=true;check();sched()},e=>{S.err=e&&e.code;S.loaded=true;sched()});
@@ -477,6 +488,7 @@ async function htmlToPdf(html){
   }finally{fr.remove()}
 }
 async function saveFile(filename,data){
+  if(/^cadangan-/.test(filename)){try{localStorage.setItem('kn-lastbackup',String(Date.now()))}catch(e){}}
   if(/\.html$/.test(filename)&&typeof data==='string'&&data.indexOf('class="paper')>=0){
     try{
       toast('Membuat PDF...');
@@ -699,16 +711,23 @@ document.addEventListener('input',e=>{
 
 /* ============ Kerangka halaman ============ */
 function overdueCount(){return bookingsArr().filter(x=>x.b.status!=='cancelled'&&x.c.balance>0&&x.b.dueDate&&x.b.dueDate<todayISO()).length}
+function bkBanner(){
+  if(!isAdmin()||!Object.keys(S.bookings).length||ui.route==='pengaturan')return '';
+  let t=0;try{t=+localStorage.getItem('kn-lastbackup')||0}catch(e){}
+  const d=t?Math.floor((Date.now()-t)/864e5):null;if(d!==null&&d<7)return '';
+  return '<div class="banner" style="margin-bottom:14px">'+(d===null?'Belum ada cadangan data yang diunduh dari perangkat ini.':'Cadangan data terakhir '+d+' hari lalu.')+' <button class="btn sm" data-act="backup">Unduh cadangan</button></div>'
+}
 function shell(inner){
   const st=S.settings,od=overdueCount();
   const nav=NAV.filter(n=>navOK(n[0])).map(([k,l])=>'<button data-act="nav" data-r="'+k+'"'+(ui.route===k?' aria-current="page"':'')+'><svg viewBox="0 0 24 24" aria-hidden="true">'+ICON[k]+'</svg>'+esc(l)+(k==='booking'&&od?'<span class="cnt" title="Invoice jatuh tempo">'+od+'</span>':'')+'</button>').join('');
   const note=S.mode==='db'?'Data tersimpan di cloud dan tersinkron antar pengguna secara langsung.':'Mode lokal: data hanya tersimpan di browser ini. Buka lewat tautan artifact yang sudah dipublikasikan agar data tersimpan di cloud.';
-  return '<aside class="side"><div class="brand">'+(st.logo?'<div class="logochip"><img src="'+esc(st.logo)+'" alt="'+esc(st.name)+'"></div>':'<div class="mark">'+esc((st.name||'T').charAt(0).toUpperCase())+'</div><div><b>'+esc(st.name)+'</b><small>'+esc(st.tagline)+'</small></div>')+'</div><nav class="nav" aria-label="Menu utama">'+nav+'</nav>'+userChip()+'<div class="sidenote">'+note+'</div></aside><main class="main">'+inner+'</main>';
+  return '<aside class="side"><div class="brand">'+(st.logo?'<div class="logochip"><img src="'+esc(st.logo)+'" alt="'+esc(st.name)+'"></div>':'<div class="mark">'+esc((st.name||'T').charAt(0).toUpperCase())+'</div><div><b>'+esc(st.name)+'</b><small>'+esc(st.tagline)+'</small></div>')+'</div><nav class="nav" aria-label="Menu utama">'+nav+'</nav>'+userChip()+'<div class="sidenote">'+note+'</div></aside><main class="main">'+bkBanner()+inner+'</main>';
 }
 function render(force){
   const app=$('#app');if(!app)return;
+  if(S.authMode&&S.authState!=='ok'){if(!force&&$('#loginForm'))return;app.innerHTML=S.authState==='init'?'<div class="loginwrap"><div class="logincard"><h1>Memuat...</h1></div></div>':vFbAuth();return}
   if(!S.loaded){app.innerHTML=shell('<div class="empty card"><h3>'+(S.slow?'Data belum bisa dijangkau':'Memuat data')+'</h3>'+(S.slow?'Periksa koneksi internet. Halaman akan terisi sendiri begitu data tersedia.':'Sebentar ya.')+'</div>');return}
-  if(!meU()){if(!force&&$('#loginForm'))return;app.innerHTML=vLogin();return}
+  if(!meU()){if(S.authMode){S.authState='blocked';S.authMsg='Akun Anda tidak terdaftar atau dinonaktifkan. Hubungi admin.';app.innerHTML=vFbAuth();return}if(!force&&$('#loginForm'))return;app.innerHTML=vLogin();return}
   if(!navOK(ui.route))ui.route='dashboard';
   if(ui.route==='pengaturan'&&ui.dirty&&!force)return;
   const V={dashboard:vDashboard,rekap:()=>ui.depId&&S.departures[ui.depId]?vDeparture(ui.depId):vRekap(),booking:()=>ui.bookingId&&S.bookings[ui.bookingId]?vDetail(ui.bookingId):vBookings(),pelanggan:vCustomers,katalog:vCatalog,laporan:vReports,pengguna:vUsers,pengaturan:vSettings};
@@ -968,7 +987,7 @@ async function saveBooking(){
     delete rec.newCust;delete rec.dp;delete rec.id;
     rec.code=(D.code||'').trim().toUpperCase()||genCode();
     if(!D.id){
-      rec.invoiceNo=nextInvoiceNo(rec.invoiceDate);rec.createdAt=Date.now();rec.payments=[];{const m=stamp();rec.createdBy=m.by;rec.createdByName=m.byName}
+      rec.invoiceNo=await allocInvoiceNo(rec.invoiceDate);rec.createdAt=Date.now();rec.payments=[];{const m=stamp();rec.createdBy=m.by;rec.createdByName=m.byName}
       if(D.dp&&num(D.dp.amount)>0)rec.payments.push({id:uid(),date:D.dp.date||rec.invoiceDate,method:D.dp.method,amount:num(D.dp.amount),ref:D.dp.ref||'',note:'Pembayaran awal / DP'});
     }
     {const m=stamp();rec.updatedBy=m.by;rec.updatedByName=m.byName;rec.updatedAt=Date.now()}
@@ -1443,7 +1462,7 @@ async function doSetup(){
   if(p1!==p2)return lerr('Ulangi password dengan sama persis.');
   await safe(async()=>{const id=uid(),salt=newSalt();await put('users',id,{name,username:u,role:'admin',active:true,salt,hash:hashPw(salt,p1),createdAt:Date.now()});setSess(id);ui.route='dashboard';render(true)});
 }
-function logout(){setSess(null);FORM=null;closeModal();ui.bookingId=null;ui.depId=null;ui.route='dashboard';render(true)}
+function logout(){if(S.authMode)return fbLogout();setSess(null);FORM=null;closeModal();ui.bookingId=null;ui.depId=null;ui.route='dashboard';render(true)}
 function userChip(){
   const u=meU();if(!u)return '';
   return '<div class="uchip"><div><b>'+esc(u.name)+'</b><small>'+esc(ROLE_L[u.role]||u.role)+' · @'+esc(u.username)+'</small></div><div class="row"><button class="btn sm" data-act="pw-open">Ganti password</button><button class="btn sm" data-act="logout">Keluar</button></div></div>';
@@ -1454,27 +1473,39 @@ function vUsers(){
   const cnt=id=>Object.values(S.bookings).filter(b=>b.createdBy===id).length;
   return '<div class="pagehead"><div><h1>Pengguna</h1><p>Daftarkan siapa saja yang boleh masuk. Setiap booking mencatat pembuatnya.</p></div><div class="row"><button class="btn primary" data-act="user-new">+ Pengguna baru</button></div></div>'
   +'<div class="card"><div class="tablewrap"><table class="t" style="min-width:640px"><thead><tr><th>Nama</th><th>Username</th><th>Peran</th><th>Status</th><th class="r">Booking dibuat</th><th>Terakhir masuk</th></tr></thead><tbody>'
-  +arr.map(([id,u])=>'<tr class="click" data-act="user-edit" data-id="'+id+'"><td class="strong">'+esc(u.name)+(id===AUTH.id?' <span class="small mut">(Anda)</span>':'')+'</td><td>@'+esc(u.username)+'</td><td>'+esc(ROLE_L[u.role]||u.role)+'</td><td>'+(u.active===false?pill('cancelled','Nonaktif'):pill('paid','Aktif'))+'</td><td class="r num">'+cnt(id)+'</td><td class="small mut">'+(u.lastLogin?new Date(u.lastLogin).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'}):'-')+'</td></tr>').join('')
+  +arr.map(([id,u])=>'<tr class="click" data-act="user-edit" data-id="'+id+'"><td class="strong">'+esc(u.name)+(id===AUTH.id?' <span class="small mut">(Anda)</span>':'')+'</td><td>'+esc(S.authMode?(u.email||'-'):'@'+u.username)+'</td><td>'+esc(ROLE_L[u.role]||u.role)+'</td><td>'+(u.active===false?pill('cancelled','Nonaktif'):pill('paid','Aktif'))+'</td><td class="r num">'+cnt(id)+'</td><td class="small mut">'+(u.lastLogin?new Date(u.lastLogin).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'}):'-')+'</td></tr>').join('')
   +'</tbody></table></div></div>'
   +'<p class="hint" style="margin:12px 2px">Admin: semua menu, pengaturan, laporan, dan kelola pengguna. Staf: dashboard, booking &amp; invoice, rekap keberangkatan, pelanggan, katalog. Password disimpan dalam bentuk hash, tidak bisa dilihat siapa pun.</p>';
 }
 function openUserForm(id){
   const u=id?S.users[id]:null;
   const D=u?{name:u.name,username:u.username,role:u.role,active:u.active===false?'0':'1',pw:''}:{name:'',username:'',role:'staff',active:'1',pw:''};
+  if(S.authMode)D.email=u?u.email||'':'';
   FORM={D,modal:true};
   openModal('<div class="sh"><h2>'+(u?'Ubah pengguna':'Pengguna baru')+'</h2><button class="x" data-act="close" aria-label="Tutup">&times;</button></div><div class="sb"><div class="fgrid">'
-  +fld('Nama lengkap *',inp('name',D.name),'span2')+fld('Username *',inp('username',D.username,{ph:'huruf kecil, tanpa spasi'}))+fld('Peran',sel('role',D.role,[['staff','Staf'],['admin','Admin']]))
-  +fld(u?'Password baru (kosongkan jika tidak diganti)':'Password * (min. 6 karakter)',inp('pw','',{type:'password'}))+fld('Status',sel('active',D.active,[['1','Aktif'],['0','Nonaktif (tidak bisa masuk)']]))
+  +fld('Nama lengkap *',inp('name',D.name),'span2')
+  +(S.authMode?fld('Email (untuk login) *',u?'<input value="'+esc(D.email)+'" disabled>':inp('email',D.email,{type:'email',ph:'nama@perusahaan.com'})):fld('Username *',inp('username',D.username,{ph:'huruf kecil, tanpa spasi'})))
+  +fld('Peran',sel('role',D.role,[['staff','Staf'],['admin','Admin']]))
+  +(S.authMode?(u?'<div class="fld"><span>Password</span><button class="btn" type="button" data-act="user-reset" data-id="'+id+'">Kirim email reset password</button></div>':fld('Password awal * (min. 6 karakter)',inp('pw','',{type:'password'}))):fld(u?'Password baru (kosongkan jika tidak diganti)':'Password * (min. 6 karakter)',inp('pw','',{type:'password'})))
+  +fld('Status',sel('active',D.active,[['1','Aktif'],['0','Nonaktif (tidak bisa masuk)']]))
   +'</div></div><div class="sf"><span class="err" id="ferr"></span>'+(u&&id!==AUTH.id?'<button class="btn danger" data-act="user-del" data-id="'+id+'" style="margin-right:auto">Hapus</button>':'')+'<button class="btn" data-act="close">Batal</button><button class="btn primary" data-act="user-save" data-id="'+(id||'')+'">Simpan</button></div>');
 }
 async function saveUser(id){
   const D=FORM.D,err=m=>{$('#ferr').textContent=m};
-  const name=(D.name||'').trim(),un=(D.username||'').trim().toLowerCase();
+  const name=(D.name||'').trim();let un=(D.username||'').trim().toLowerCase(),em='';
   if(!name)return err('Nama wajib diisi.');
-  if(!usernameOK(un))return err('Username 3-30 karakter: huruf kecil, angka, titik, strip, garis bawah.');
-  if(Object.entries(S.users).some(([k,x])=>k!==id&&x.username===un))return err('Username sudah dipakai.');
-  if(!id&&(D.pw||'').length<6)return err('Password minimal 6 karakter.');
-  if(id&&D.pw&&D.pw.length<6)return err('Password minimal 6 karakter.');
+  if(S.authMode){
+    em=id?(S.users[id].email||''):(D.email||'').trim().toLowerCase();
+    if(!id&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em))return err('Isi email yang valid.');
+    if(!id&&Object.values(S.users).some(x=>(x.email||'').toLowerCase()===em))return err('Email sudah terdaftar.');
+    if(!id&&(D.pw||'').length<6)return err('Password awal minimal 6 karakter.');
+    un=em.split('@')[0];
+  }else{
+    if(!usernameOK(un))return err('Username 3-30 karakter: huruf kecil, angka, titik, strip, garis bawah.');
+    if(Object.entries(S.users).some(([k,x])=>k!==id&&x.username===un))return err('Username sudah dipakai.');
+    if(!id&&(D.pw||'').length<6)return err('Password minimal 6 karakter.');
+    if(id&&D.pw&&D.pw.length<6)return err('Password minimal 6 karakter.');
+  }
   const active=D.active!=='0';
   if(id&&(D.role!=='admin'||!active)){
     const others=Object.entries(S.users).filter(([k,x])=>k!==id&&x.role==='admin'&&x.active!==false);
@@ -1483,8 +1514,15 @@ async function saveUser(id){
   if(id===AUTH.id&&!active)return err('Anda tidak bisa menonaktifkan akun sendiri.');
   await safe(async()=>{
     const old=id?S.users[id]:{createdAt:Date.now()};let rec={...old,name,username:un,role:D.role,active};
-    if(D.pw){rec.salt=newSalt();rec.hash=hashPw(rec.salt,D.pw)}
-    const nid=id||uid();await put('users',nid,rec);closeModal();toast(id?'Pengguna diperbarui':'Pengguna ditambahkan');render(true);
+    let nid=id;
+    if(S.authMode){
+      rec.email=em;delete rec.hash;delete rec.salt;
+      if(!id){try{nid=await KN_AUTH.createUser(em,D.pw)}catch(e){return err(fbErr(e))}}
+    }else{
+      if(D.pw){rec.salt=newSalt();rec.hash=hashPw(rec.salt,D.pw)}
+      nid=id||uid();
+    }
+    await put('users',nid,rec);closeModal();toast(id?'Pengguna diperbarui':'Pengguna ditambahkan');render(true);
   });
 }
 async function delUser(id){
@@ -1501,11 +1539,61 @@ function openPwForm(){
 async function savePw(){
   const D=FORM.D,u=meU(),err=m=>{$('#ferr').textContent=m};
   if(!u)return;
-  if(hashPw(u.salt,D.old||'')!==u.hash)return err('Password lama salah.');
+  if(!S.authMode&&hashPw(u.salt,D.old||'')!==u.hash)return err('Password lama salah.');
   if((D.pw||'').length<6)return err('Password baru minimal 6 karakter.');
   if(D.pw!==D.pw2)return err('Ulangi password baru dengan sama persis.');
+  if(S.authMode){try{await KN_AUTH.changePassword(D.old||'',D.pw);closeModal();toast('Password diganti')}catch(e){err(fbErr(e))}return}
   await safe(async()=>{const salt=newSalt();await put('users',AUTH.id,{...u,salt,hash:hashPw(salt,D.pw)});closeModal();toast('Password diganti')});
 }
+
+/* ============ Firebase Authentication ============ */
+let _subStarted=false;
+async function onFbUser(u){
+  if(!u){S.fbUser=null;S.authState='login';render(true);return}
+  S.fbUser=u;
+  try{
+    const ps=await DBH.doc('users/'+u.uid).get();
+    if(ps.exists){
+      if(ps.data().active===false){S.authState='blocked';S.authMsg='Akun Anda dinonaktifkan. Hubungi admin.'}
+      else{AUTH.id=u.uid;S.authState='ok';if(!_subStarted){_subStarted=true;subscribe()}}
+    }else{
+      const st=await DBH.doc('meta/setup').get();
+      if(st.exists){S.authState='blocked';S.authMsg='Akun ini belum didaftarkan di aplikasi. Minta admin menambahkan email Anda di menu Pengguna.'}
+      else S.authState='setup';
+    }
+  }catch(e){S.authState='blocked';S.authMsg='Tidak bisa membaca data ('+((e&&(e.code||e.message))||'?')+'). Periksa koneksi atau hubungi admin.'}
+  render(true);
+}
+function vFbAuth(){
+  const st=S.settings,mark=(st.logo?'<img class="loginlogo" src="'+esc(st.logo)+'" alt="'+esc(st.name)+'">':'<div class="mark" style="margin:0 auto 12px">'+esc((st.name||'T').charAt(0).toUpperCase())+'</div>');
+  const f=(id,l,t,ac)=>'<label class="fld"><span>'+l+'</span><input id="'+id+'" type="'+(t||'text')+'" autocomplete="'+(ac||'off')+'"></label>';
+  const A=S.authState;
+  if(A==='blocked')return '<div class="loginwrap"><div class="logincard">'+mark+'<h1>Akses ditolak</h1><p class="hint">'+esc(S.authMsg||'')+'</p><button class="btn" style="width:100%;justify-content:center" data-act="fb-logout">Keluar</button></div></div>';
+  if(A==='setup')return '<div class="loginwrap"><form class="logincard" id="loginForm" onsubmit="return false">'+mark+'<h1>Buat admin pertama</h1><p class="hint">Login sebagai '+esc(S.fbUser&&S.fbUser.email||'')+'. Belum ada pengguna terdaftar, jadi akun ini menjadi admin. Selesaikan sekarang agar tidak dipakai orang lain.</p>'+f('lname','Nama lengkap')+'<div class="err" id="lerr" style="min-height:18px"></div><button class="btn primary" style="width:100%;justify-content:center" data-act="fb-setup">Jadikan admin</button><button class="btn" style="width:100%;justify-content:center" type="button" data-act="fb-logout">Keluar</button></form></div>';
+  return '<div class="loginwrap"><form class="logincard" id="loginForm" onsubmit="return false">'+mark+'<h1>Masuk</h1>'+f('lemail','Email','email','username')+f('lpw','Password','password','current-password')+'<div class="err" id="lerr" style="min-height:18px"></div><button class="btn primary" style="width:100%;justify-content:center" data-act="fb-login">Masuk</button><button class="btn sm" type="button" data-act="fb-forgot" style="justify-self:center">Lupa password?</button></form></div>';
+}
+const fbErr=e=>{const c=(e&&e.code)||'';return /invalid-credential|wrong-password|user-not-found|invalid-login/.test(c)?'Email atau password salah.':/too-many/.test(c)?'Terlalu banyak percobaan. Coba lagi beberapa menit lagi.':/invalid-email/.test(c)?'Format email tidak valid.':/email-already/.test(c)?'Email sudah terdaftar.':/weak-password/.test(c)?'Password terlalu lemah (min. 6 karakter).':/network/.test(c)?'Koneksi internet bermasalah.':/operation-not-allowed/.test(c)?'Login Email/Password belum diaktifkan di Firebase Console.':'Gagal: '+((e&&(e.message||e.code))||'kesalahan tidak diketahui')};
+async function fbLogin(){
+  const em=($('#lemail').value||'').trim(),pw=$('#lpw').value||'';
+  if(!em||!pw)return lerr('Isi email dan password.');
+  try{await KN_AUTH.signIn(em,pw)}catch(e){lerr(fbErr(e))}
+}
+async function fbForgot(){
+  const em=($('#lemail').value||'').trim();if(!em)return lerr('Isi email Anda dulu, lalu klik Lupa password.');
+  try{await KN_AUTH.reset(em);lerr('Email reset password dikirim ke '+em+' (cek juga folder spam).')}catch(e){lerr(fbErr(e))}
+}
+async function fbSetup(){
+  const name=($('#lname').value||'').trim(),u=S.fbUser;if(!name)return lerr('Isi nama lengkap.');
+  try{
+    const bt=DBH.batch();
+    bt.set(DBH.doc('users/'+u.uid),{name,email:u.email,username:(u.email||'').split('@')[0],role:'admin',active:true,createdAt:Date.now()});
+    bt.set(DBH.doc('meta/setup'),{by:u.uid,at:Date.now()});
+    await bt.commit();
+    try{const q=await DBH.collection('users').get();for(const d of q.docs){if(d.data().hash)await d.ref.delete()}}catch(e){}
+    await onFbUser(u);
+  }catch(e){lerr(fbErr(e))}
+}
+function fbLogout(){KN_AUTH.signOut().then(()=>location.reload(),()=>location.reload())}
 
 /* ============ Pelanggan ============ */
 function vCustomers(){
@@ -1699,6 +1787,11 @@ document.addEventListener('click',async e=>{
   const a=el.dataset.act,id=el.dataset.id,i=parseInt(el.dataset.i);
   switch(a){
     case 'nav':go(el.dataset.r);break;
+    case 'fb-login':fbLogin();break;
+    case 'fb-setup':fbSetup();break;
+    case 'fb-logout':fbLogout();break;
+    case 'fb-forgot':fbForgot();break;
+    case 'user-reset':{const u=S.users[id];if(u&&u.email){try{await KN_AUTH.reset(u.email);toast('Email reset password dikirim ke '+u.email)}catch(e){toast(fbErr(e))}}break}
     case 'login':doLogin();break;
     case 'setup-admin':doSetup();break;
     case 'logout':logout();break;
@@ -1794,7 +1887,7 @@ document.addEventListener('input',e=>{
   const r=(location.hash||'').slice(1);if(NAV.some(n=>n[0]===r))ui.route=r;
   render();
   try{const c=window.claude;if(c&&c.use){DBH=await c.use('db');DL=await c.use('downloads')}}catch(e){}
-  if(DBH){S.mode='db';subscribe()}else{S.mode='local';loadLocal();S.loaded=true;render()}
+  if(DBH){S.mode='db';if(window.KN_AUTH){S.authMode=true;S.authState='init';render(true);KN_AUTH.onChange(onFbUser)}else subscribe()}else{S.mode='local';loadLocal();S.loaded=true;render()}
 })();
 </script>
 <script src="keuangan.js?v=3"></script>
