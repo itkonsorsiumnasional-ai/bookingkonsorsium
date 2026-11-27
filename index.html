@@ -717,13 +717,28 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#modal').hidden
 
 /* ============ Komponen form ============ */
 const fld=(label,inner,cls)=>'<label class="fld '+(cls||'')+'"><span>'+esc(label)+'</span>'+inner+'</label>';
-const inp=(path,val,o)=>{o=o||{};return '<input data-f="'+path+'"'+(o.num?' data-num':'')+(o.re?' data-re':'')+' type="'+(o.type||'text')+'" value="'+esc(val==null?'':val)+'"'+(o.ph?' placeholder="'+esc(o.ph)+'"':'')+(o.type==='number'?' step="'+(o.step||'any')+'" inputmode="decimal"':'')+(o.min!==undefined?' min="'+o.min+'"':'')+'>'};
+/* Kolom rupiah: tampil dengan titik ribuan otomatis saat mengetik */
+const RP_RE=/^(pkgPrice|pkgCost|tipsPerPax|discPerPax|discount|adminFee|price|cost|amount|dp\.amount|openCash|openAsset|openDebt|items\.\d+\.price|items\.\d+\.cost|passengers\.\d+\.price)$/;
+const dots=v=>{v=String(v==null?'':v).trim();if(v==='')return '';const neg=v[0]==='-',d=v.replace(/[^\d]/g,'');return d===''?(neg?'-':''):(neg?'-':'')+d.replace(/^0+(?=\d)/,'').replace(/\B(?=(\d{3})+(?!\d))/g,'.')};
+const undots=v=>String(v||'').replace(/\./g,'').replace(/[^\d-]/g,'');
+const inp=(path,val,o)=>{o=o||{};if(o.type==='number'&&RP_RE.test(path))return '<input data-f="'+path+'" data-rp type="text" inputmode="numeric" autocomplete="off" value="'+esc(dots(Math.round(num(val))||(val===0||val==='0'?'':'')))+'"'+(o.ph?' placeholder="'+esc(o.ph)+'"':'')+'>';return '<input data-f="'+path+'"'+(o.num?' data-num':'')+(o.re?' data-re':'')+' type="'+(o.type||'text')+'" value="'+esc(val==null?'':val)+'"'+(o.ph?' placeholder="'+esc(o.ph)+'"':'')+(o.type==='number'?' step="'+(o.step||'any')+'" inputmode="decimal"':'')+(o.min!==undefined?' min="'+o.min+'"':'')+'>'};
 const sel=(path,val,opts,o)=>{o=o||{};return '<select data-f="'+path+'"'+(o.re?' data-re':'')+'>'+opts.map(x=>{const v=Array.isArray(x)?x[0]:x,l=Array.isArray(x)?x[1]:x;return '<option value="'+esc(v)+'"'+(String(v)===String(val)?' selected':'')+'>'+esc(l)+'</option>'}).join('')+'</select>'};
 const txa=(path,val,rows)=>'<textarea data-f="'+path+'" rows="'+(rows||3)+'">'+esc(val==null?'':val)+'</textarea>';
 const nz=v=>num(v)?v:'';
 
 document.addEventListener('input',e=>{
   const t=e.target;if(!t.dataset||!t.dataset.f||!FORM)return;
+  if(t.dataset.rp!==undefined){
+    const before=t.value,pos=t.selectionStart==null?before.length:t.selectionStart;
+    const digitsBefore=before.slice(0,pos).replace(/[^\d]/g,'').length;
+    const out=dots(before);
+    if(out!==before){t.value=out;let n=0,i=0;if(digitsBefore){for(;i<out.length&&n<digitsBefore;i++)if(/\d/.test(out[i]))n++}else i=out[0]==='-'?1:0;try{t.setSelectionRange(i,i)}catch(_){}}
+    const raw=undots(t.value);
+    setPath(FORM.D,t.dataset.f,t.dataset.nb!==undefined?(raw===''||raw==='-'?'':num(raw)):num(raw));
+    if(FORM.settings)ui.dirty=true;
+    if(t.dataset.re&&FORM.rerender)FORM.rerender();else if(FORM.onChange)FORM.onChange();
+    return;
+  }
   setPath(FORM.D,t.dataset.f,t.dataset.nb!==undefined?(t.value===''?'':num(t.value)):(t.dataset.num!==undefined||t.type==='number'?num(t.value):t.value));
   if(FORM.settings)ui.dirty=true;
   if(t.dataset.re&&FORM.rerender)FORM.rerender();else if(FORM.onChange)FORM.onChange();
@@ -927,7 +942,7 @@ function bookingBody(D,editing){
   +'</div></fieldset>'
   +'<fieldset><legend>Peserta ('+paxOf(D).length+')</legend><div class="rows">'
   +D.passengers.map((p,i)=>'<div class="rowcard">'+fld('Nama sesuai paspor (dengan sapaan, mis. Mrs ANI)',inp('passengers.'+i+'.name',p.name),'wide2')+fld('Tipe',sel('passengers.'+i+'.type',p.type,PAXT))
-    +fld('Harga (kosong = harga paket)','<input data-f="passengers.'+i+'.price" data-nb type="number" min="0" step="any" inputmode="decimal" value="'+esc(p.price===''||p.price==null?'':p.price)+'" placeholder="'+(num(D.pkgPrice)?fnum(D.pkgPrice):'0')+'">')
+    +fld('Harga (kosong = harga paket)','<input data-f="passengers.'+i+'.price" data-nb data-rp type="text" inputmode="numeric" autocomplete="off" value="'+esc(p.price===''||p.price==null?'':dots(Math.round(num(p.price))))+'" placeholder="'+(num(D.pkgPrice)?fnum(D.pkgPrice):'0')+'">')
     +fld('No. paspor / KTP',inp('passengers.'+i+'.idNo',p.idNo))+fld('Catatan',inp('passengers.'+i+'.note',p.note,{ph:'Kursi, alergi, dll'}))
     +'<button class="btn sm danger" type="button" data-act="rm-pass" data-i="'+i+'">Hapus</button>'
     +'<details class="pdet"><summary>Paspor dan penerbangan peserta (untuk rekap)</summary><div class="fgrid">'
