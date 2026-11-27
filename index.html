@@ -351,7 +351,7 @@ const isChn=b=>b.taxFmt==='row'||(b.taxFmt==='auto'&&num(b.taxPct)>0);
 const discLabel=(b,agent)=>b.discMode==='after'?'Agen Komisi':(agent?'Agent Discount':'Diskon');
 /* Penandatangan invoice = pengguna yang membuat booking (nama terkini dari data pengguna); cadangan: nama tercatat saat dibuat, lalu Pengaturan */
 const signerName=b=>{const u=b&&b.createdBy&&S.users[b.createdBy];return (u&&(u.name||u.username))||(b&&b.createdByName)||S.settings.signer||''};
-const discDetail=b=>{const n=paxOf(b).length,p=num(b.discPerPax);return p&&n?' ('+n+' x '+rp(p)+')':''};
+const discDetail=b=>{if(b.discMode==='after')return '';const n=paxOf(b).length,p=num(b.discPerPax);return p&&n?' ('+n+' x '+rp(p)+')':''};
 const pctS=v=>String(num(v)).replace('.',',');
 function calc(b){
   const items=b.items||[],pax=paxOf(b);
