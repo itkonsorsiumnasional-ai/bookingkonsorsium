@@ -736,7 +736,7 @@ function render(force){
 }
 function updateList(){
   const el=$('#listbody');if(!el)return;
-  const T={booking:tBookings,pelanggan:tCustomers,katalog:tCatalog};
+  const T={booking:tBookings,pelanggan:tCustomers,katalog:tCatalog,rekap:tRekap};
   if(T[ui.route])el.innerHTML=T[ui.route]();
 }
 function go(r){if(!navOK(r))r='dashboard';ui.route=r;ui.q='';ui.fStatus='';ui.fPay='';ui.fCat='';ui.fBy='';ui.bookingId=null;ui.depId=null;ui.dirty=false;FORM=null;try{history.replaceState(null,'','#'+r)}catch(e){}render(true);window.scrollTo(0,0)}
@@ -1264,20 +1264,69 @@ function quotaCard(id){
    +'<div class="stack small" style="gap:6px">'+q.parts.map(p=>'<div class="row" style="justify-content:space-between"><span>'+(p.id===id?'<b>':'')+esc(p.name)+(p.dur?' '+esc(p.dur):'')+(p.id===id?'</b>':'')+'</span><span class="num">'+p.n+' peserta</span></div>').join('')+'</div></div></div>';
 }
 const hex=h=>'#'+h;
+/* ---- Pencarian rekap keberangkatan: tanggal berangkat (23 des, 23 des 2026, 23/12/2026, des 2026), nama tour, durasi, catatan, tour leader ---- */
+const RK_MON={jan:0,januari:0,january:0,feb:1,februari:1,february:1,mar:2,maret:2,march:2,apr:3,april:3,mei:4,may:4,jun:5,juni:5,june:5,jul:6,juli:6,july:6,agu:7,ags:7,agt:7,agus:7,agustus:7,aug:7,august:7,sep:8,sept:8,september:8,okt:9,oct:9,oktober:9,october:9,nov:10,november:10,des:11,dec:11,desember:11,december:11};
+const RK_NAMES=Object.keys(RK_MON).sort((a,b)=>b.length-a.length).join('|');
+function rkParse(raw){
+  let s=' '+String(raw||'').toLowerCase().replace(/[,.]/g,' ').replace(/\s+/g,' ')+' ',h;
+  const F={d:null,m:null,y:null};
+  if(h=/\s(\d{4})-(\d{1,2})-(\d{1,2})(?=\s)/.exec(s)){F.y=+h[1];F.m=+h[2]-1;F.d=+h[3];s=s.replace(h[0],' ')}
+  else if(h=/\s(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?(?=\s)/.exec(s)){F.d=+h[1];F.m=+h[2]-1;if(h[3]){F.y=+h[3];if(F.y<100)F.y+=2000}s=s.replace(h[0],' ')}
+  else if(h=new RegExp('\\s(\\d{1,2})\\s*('+RK_NAMES+')(?:\\s+(\\d{4}))?(?=\\s)').exec(s)){F.d=+h[1];F.m=RK_MON[h[2]];if(h[3])F.y=+h[3];s=s.replace(h[0],' ')}
+  else if(h=new RegExp('\\s('+RK_NAMES+')(?:\\s+(\\d{4}))?(?=\\s)').exec(s)){F.m=RK_MON[h[1]];if(h[2])F.y=+h[2];s=s.replace(h[0],' ')}
+  else if(h=/\s(20\d{2})(?=\s)/.exec(s)){F.y=+h[1];s=s.replace(h[0],' ')}
+  if(F.d==null&&/^\s*\d{1,2}\s*$/.test(s)){F.d=+s.trim();s=' '}
+  return {F,words:s.trim().split(' ').filter(Boolean)};
+}
+function rkActive(P){return !!(P.words.length||P.F.d!=null||P.F.m!=null||P.F.y!=null)}
+function rkMatch(d,P){
+  const A=dparts(d.departDate),F=P.F;
+  if(F.d!=null&&(!A||A.d!==F.d))return false;
+  if(F.m!=null&&(!A||A.m!==F.m))return false;
+  if(F.y!=null&&(!A||A.y!==F.y))return false;
+  if(P.words.length){
+    const hay=[d.name,d.notes,durCode(d.departDate,d.returnDate),d.tl&&d.tl.name,rangeText(d.departDate,d.returnDate)].join(' ').toLowerCase(),flat=hay.replace(/\s+/g,'');
+    const toks=hay.split(/[^a-z0-9]+/);
+    return P.words.every(w=>/^\d+$/.test(w)?toks.includes(w):(hay.includes(w)||flat.includes(w)));
+  }
+  return true;
+}
+function rkLabel(P){
+  const F=P.F,t=[];
+  if(F.d!=null||F.m!=null||F.y!=null)t.push('berangkat '+[F.d!=null?F.d:'',F.m!=null?MON[F.m]&&MON[F.m].slice(0,3):'',F.y!=null?F.y:''].filter(x=>x!=='').join(' '));
+  if(P.words.length)t.push('kata "'+P.words.join(' ')+'"');
+  return t.join(' + ');
+}
+function rekapRow(id,d,kid,q,dim,flat){
+  const s=depStats(id);
+  return '<tr class="click" data-act="open-dep" data-id="'+id+'"'+(dim?' style="opacity:.55"':'')+'><td><input type="checkbox" data-act="sel-dep" data-id="'+id+'" aria-label="Pilih untuk unduh gabungan"'+(ui.sel[id]?' checked':'')+'></td>'
+  +'<td'+(kid&&!flat?' style="padding-left:30px"':'')+'><span class="strong">'+(kid&&!flat?'<span class="mut">&#8627; </span>':'')+esc(d.name||'-')+'</span>'+(d.tl&&d.tl.name?'<div class="small mut">TL: '+esc(d.tl.name)+'</div>':'')+'</td>'
+  +'<td>'+esc(rangeText(d.departDate,d.returnDate))+'<div class="small mut">'+esc(durCode(d.departDate,d.returnDate))+(d.notes&&/high season/i.test(d.notes)?' · <b style="color:var(--red)">High Season</b>':'')+'</div></td><td class="r num">'+s.n+'</td>'
+  +'<td>'+(kid?'<span class="small mut">berbagi kuota induk</span>':(q.has?'<span class="strong num">'+q.used+' / '+q.quota+'</span> '+quotaPill(q)+(q.parts.length>1?'<div class="small mut">total semua program</div>':''):'<span class="small mut">kuota belum diatur</span>'))+'</td>'
+  +'<td class="r num">'+s.bk+'</td><td class="r num">'+rp(s.total)+'</td><td class="r num">'+(s.bal?'<span style="color:var(--red);font-weight:600">'+rp(s.bal)+'</span>':'-')+'</td></tr>';
+}
+function tRekap(){
+  const all=Object.entries(S.departures),P=rkParse(ui.q),act=rkActive(P),hit=new Set();
+  if(act)all.forEach(([id,d])=>{if(rkMatch(d,P))hit.add(id)});
+  const show=id=>!act||hit.has(id);
+  const roots=all.filter(([id])=>groupOf(id)===id).sort((a,b)=>(a[1].departDate||'9').localeCompare(b[1].departDate||'9')||(a[1].name||'').localeCompare(b[1].name||''));
+  let body='',n=0;
+  roots.forEach(([id,d])=>{
+    const kids=depKids(id).filter(([k])=>show(k));
+    if(!show(id)&&!kids.length)return;
+    const q=quotaInfo(id);
+    if(show(id)){body+=rekapRow(id,d,false,q,false,act);n++}
+    kids.forEach(([k,kd])=>{body+=rekapRow(k,kd,true,q,false,act);n++});
+  });
+  const info='<div class="cb small mut">'+(act?'Menampilkan <b>'+n+'</b> dari '+all.length+' keberangkatan &middot; '+esc(rkLabel(P)):all.length+' keberangkatan')+'</div>';
+  if(!n)return info+'<div class="empty"><h3>Tidak ada hasil</h3><p>Tidak ada keberangkatan yang cocok dengan "'+esc(ui.q.trim())+'". Coba tulis seperti 23 des, 23 des 2026, des 2026, 7D6N, atau high season.</p></div>';
+  return info+'<div class="tablewrap"><table class="t" style="min-width:900px"><thead><tr><th style="width:36px"></th><th>Keberangkatan</th><th>Periode</th><th class="r">Peserta</th><th>Kuota</th><th class="r">Booking</th><th class="r">Total tagihan</th><th class="r">Sisa bayar</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+}
 function vRekap(){
   const all=Object.entries(S.departures);
-  const roots=all.filter(([id])=>groupOf(id)===id).sort((a,b)=>(a[1].departDate||'9').localeCompare(b[1].departDate||'9')||(a[1].name||'').localeCompare(b[1].name||''));
   const nsel=all.filter(([id])=>ui.sel[id]).length;
-  const row=(id,d,kid,q)=>{const s=depStats(id);
-    return '<tr class="click" data-act="open-dep" data-id="'+id+'"><td><input type="checkbox" data-act="sel-dep" data-id="'+id+'" aria-label="Pilih untuk unduh gabungan"'+(ui.sel[id]?' checked':'')+'></td>'
-    +'<td'+(kid?' style="padding-left:30px"':'')+'><span class="strong">'+(kid?'<span class="mut">&#8627; </span>':'')+esc(d.name||'-')+'</span>'+(d.tl&&d.tl.name?'<div class="small mut">TL: '+esc(d.tl.name)+'</div>':'')+'</td>'
-    +'<td>'+esc(rangeText(d.departDate,d.returnDate))+'<div class="small mut">'+esc(durCode(d.departDate,d.returnDate))+'</div></td><td class="r num">'+s.n+'</td>'
-    +'<td>'+(kid?'<span class="small mut">berbagi kuota induk</span>':(q.has?'<span class="strong num">'+q.used+' / '+q.quota+'</span> '+quotaPill(q)+(q.parts.length>1?'<div class="small mut">total semua program</div>':''):'<span class="small mut">kuota belum diatur</span>'))+'</td>'
-    +'<td class="r num">'+s.bk+'</td><td class="r num">'+rp(s.total)+'</td><td class="r num">'+(s.bal?'<span style="color:var(--red);font-weight:600">'+rp(s.bal)+'</span>':'-')+'</td></tr>'};
-  let body='';
-  roots.forEach(([id,d])=>{const q=quotaInfo(id);body+=row(id,d,false,q);depKids(id).forEach(([kid,kd])=>{body+=row(kid,kd,true,q)})});
   return '<div class="pagehead"><div><h1>Rekap Keberangkatan</h1><p>Peserta, kuota, paspor, penerbangan, dan kamar per keberangkatan, siap diunduh sebagai Excel.</p></div><div class="row"><button class="btn" data-act="xlsx-sel"'+(nsel?'':' disabled')+'>Unduh Excel ('+nsel+' dipilih)</button><button class="btn primary" data-act="new-dep">+ Keberangkatan baru</button></div></div>'
-  +'<div class="card">'+(roots.length?'<div class="tablewrap"><table class="t" style="min-width:900px"><thead><tr><th style="width:36px"></th><th>Keberangkatan</th><th>Periode</th><th class="r">Peserta</th><th>Kuota</th><th class="r">Booking</th><th class="r">Total tagihan</th><th class="r">Sisa bayar</th></tr></thead><tbody>'+body+'</tbody></table></div><div class="cb hint">Program 2 Negara (4D/5D) dikaitkan ke induk 3 Negara pada tanggal yang sama lewat Ubah keberangkatan, dan memakai kuota induk bersama-sama. Mencentang induk lalu Unduh Excel otomatis menyertakan semua program turunannya.</div>'
+  +'<div class="card">'+(all.length?'<div class="filters"><input type="search" id="q" placeholder="Cari tanggal berangkat (mis. 23 des, 23 des 2026, des 2026), nama tour, 7D6N, high season" value="'+esc(ui.q)+'" aria-label="Cari keberangkatan"></div><div id="listbody">'+tRekap()+'</div><div class="cb hint">Program 2 Negara (4D/5D) dikaitkan ke induk 3 Negara pada tanggal yang sama lewat Ubah keberangkatan, dan memakai kuota induk bersama-sama. Mencentang induk lalu Unduh Excel otomatis menyertakan semua program turunannya.</div>'
     :'<div class="empty"><h3>Belum ada keberangkatan</h3><p>Buat keberangkatan (misalnya Tour 3 Negara, 18-24 Nov 2026), lalu hubungkan booking ke keberangkatan itu dari form booking. Peserta, paspor, penerbangan, dan kamar akan terkumpul otomatis.</p><div class="row"><button class="btn primary" data-act="new-dep">+ Keberangkatan baru</button><button class="btn" data-act="seed">Isi data contoh</button></div></div>')+'</div>';
 }
 function vDeparture(id){
