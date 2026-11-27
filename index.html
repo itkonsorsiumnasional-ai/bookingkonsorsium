@@ -351,6 +351,22 @@ const isChn=b=>b.taxFmt==='row'||(b.taxFmt==='auto'&&num(b.taxPct)>0);
 const discLabel=(b,agent)=>b.discMode==='after'?'Agen Komisi':(agent?'Agent Discount':'Diskon');
 /* Penandatangan invoice = pengguna yang membuat booking (nama terkini dari data pengguna); cadangan: nama tercatat saat dibuat, lalu Pengaturan */
 const signerName=b=>{const u=b&&b.createdBy&&S.users[b.createdBy];return (u&&(u.name||u.username))||(b&&b.createdByName)||S.settings.signer||''};
+/* Judul invoice standar Tour 2 & 3 Negara: dikenali dari teks tujuan/nama keberangkatan + durasi (malam) */
+const T_37='TOUR 3 NEGARA ASIA MALAYSIA \u2013 SINGAPORE \u2013 THAILAND (HAT YAI) 7H6M',T_38='TOUR 3 NEGARA ASIA MALAYSIA \u2013 SINGAPORE \u2013 THAILAND (BANGKOK+PATTAYA) 8H7M',T_24='TOUR 2 NEGARA ASIA MALAYSIA \u2013 SINGAPORE 4H3M',T_25='TOUR 2 NEGARA ASIA MALAYSIA \u2013 SINGAPORE 5H4M';
+function stdTour(text,n){
+  const t=String(text||'').toUpperCase();
+  const is3=/\b3\s*NEGARA\b|THAILAND|HAT\s?YAI|HATYAI|BANGKOK|PATTAYA/.test(t);
+  const is2=!is3&&/\b2\s*NEGARA\b|MALAYSIA\s*[-\u2013]\s*SINGAPORE/.test(t);
+  if(is3){if(n===6)return T_37;if(n===7)return T_38;if(/BANGKOK|PATTAYA/.test(t))return T_38;if(/HAT\s?YAI|HATYAI/.test(t))return T_37;return null}
+  if(is2){if(n===3)return T_24;if(n===4)return T_25;return null}
+  return null;
+}
+function tourTitle(b){
+  const dep=b&&b.departureId&&S.departures[b.departureId];
+  const a=(b&&b.departDate)||(dep&&dep.departDate),z=(b&&b.returnDate)||(dep&&dep.returnDate);
+  const n=a&&z?diffDays(z,a):null;
+  return stdTour(((b&&b.destination)||'')+' '+((dep&&dep.name)||''),n)||(b&&b.destination)||'';
+}
 const discDetail=b=>{if(b.discMode==='after')return '';const n=paxOf(b).length,p=num(b.discPerPax);return p&&n?' ('+n+' x '+rp(p)+')':''};
 const pctS=v=>String(num(v)).replace('.',',');
 function calc(b){
@@ -827,7 +843,7 @@ function vDetail(id){
   +'<div class="row"><select id="stSel" aria-label="Ubah status booking" style="width:auto">'+Object.entries(BSTAT).map(([k,l])=>'<option value="'+k+'"'+(b.status===k?' selected':'')+'>'+l+'</option>').join('')+'</select><button class="btn" data-act="edit-booking" data-id="'+id+'">Ubah</button><button class="btn primary" data-act="invoice" data-id="'+id+'">Lihat invoice</button></div></div>'
   +'<div class="detail-grid"><div class="main">'
   +'<div class="card"><div class="ch"><h2>Perjalanan</h2><div class="row">'+pill(b.status,BSTAT[b.status])+pill(p.k,p.l)+'</div></div><div class="cb"><div class="kv">'
-  +'<div><small>Paket / tujuan</small>'+esc(b.destination||'-')+(b.pkgNote?'<div class="small mut">'+esc(b.pkgNote)+'</div>':'')+'</div><div><small>Periode</small>'+esc(periodText(b))+'</div><div><small>Jenis</small>'+esc(b.tripType||'-')+'</div>'
+  +'<div><small>Paket / tujuan</small>'+esc(tourTitle(b)||'-')+(b.pkgNote?'<div class="small mut">'+esc(b.pkgNote)+'</div>':'')+'</div><div><small>Periode</small>'+esc(periodText(b))+'</div><div><small>Jenis</small>'+esc(b.tripType||'-')+'</div>'
   +'<div><small>Keberangkatan (rekap)</small>'+(dep?'<button class="linkbtn" data-act="goto-dep" data-id="'+b.departureId+'">'+esc(dep.name)+' &rarr;</button>':'<span class="mut">Belum dihubungkan</span>')+'</div>'
   +'<div><small>Pelanggan / agen</small>'+esc(cu.name||'-')+'<div class="small mut">'+esc([cu.phone,cu.email].filter(Boolean).join(' · '))+'</div></div><div><small>Sales</small>'+esc(b.sales||'-')+'</div><div><small>Dibuat oleh</small>'+esc(b.createdByName||'-')+(b.createdAt?'<div class="small mut">'+new Date(b.createdAt).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})+'</div>':'')+'</div>'+(b.updatedByName?'<div><small>Terakhir diubah oleh</small>'+esc(b.updatedByName)+(b.updatedAt?'<div class="small mut">'+new Date(b.updatedAt).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})+'</div>':'')+'</div>':'')+'<div><small>Tanggal invoice</small>'+fmtDate(b.invoiceDate)+'</div><div><small>Jatuh tempo / pelunasan</small>'+fmtDate(b.dueDate)+'</div></div>'
   +(b.notes?'<p class="small mut" style="margin:14px 0 0;white-space:pre-line">'+esc(b.notes)+'</p>':'')+'</div></div>'
@@ -990,6 +1006,7 @@ async function saveBooking(){
       passengers:pax.map(p=>{const q={...p,name:p.name.trim()};if(q.price===''||q.price==null)delete q.price;else q.price=num(q.price);return q})};
     const id=D.id||uid();
     delete rec.newCust;delete rec.dp;delete rec.id;
+    rec.destination=tourTitle(rec)||rec.destination;
     rec.code=(D.code||'').trim().toUpperCase()||genCode();
     if(!D.id){
       rec.invoiceNo=await allocInvoiceNo(rec.invoiceDate);rec.createdAt=Date.now();rec.payments=[];{const m=stamp();rec.createdBy=m.by;rec.createdByName=m.byName}
@@ -1087,7 +1104,7 @@ function invoiceHTML(id){
   const b=S.bookings[id],c=calc(b),cu=S.customers[b.customerId]||{},st=S.settings,ps=payState(b);
   const proforma=b.status==='draft',pax=paxOf(b),priced=isPaxPriced(b);
   const stamp=b.status==='cancelled'?'<div class="p-stamp bad">DIBATALKAN</div>':(ps.k==='paid'?'<div class="p-stamp ok">LUNAS</div>':'');
-  const title=b.destination||'-';
+  const title=tourTitle(b)||'-';
   const prs=pax.length?pax:[null];
   let rows='';
   prs.forEach((p,i)=>{
@@ -1138,7 +1155,7 @@ function receiptHTML(id,i){
   return '<div class="paper">'+paperHead('KWITANSI','<div><b>'+esc(receiptNo(b,i))+'</b></div><div>Tanggal: '+fmtDate(p.date)+'</div>')
   +'<div class="p-grid" style="grid-template-columns:1fr"><div class="p-box"><h4>'+(refund?'Dikembalikan kepada':'Telah diterima dari')+'</h4><p><b>'+esc(cu.name||'-')+'</b></p></div>'
   +'<div class="p-box"><h4>Jumlah</h4><p style="font-size:22px;font-weight:800;color:#1f4fd8">'+rp(Math.abs(num(p.amount)))+'</p><div class="p-say" style="margin-top:8px">Terbilang: '+esc(terbilang(p.amount))+'</div></div>'
-  +'<div class="p-box"><h4>Untuk '+(refund?'refund':'pembayaran')+'</h4><p>Invoice '+esc(b.invoiceNo)+' &middot; '+esc(b.destination||'-')+'</p><p>Metode: '+esc(p.method)+(p.ref?' &middot; Ref: '+esc(p.ref):'')+'</p>'+(p.note?'<p>'+esc(p.note)+'</p>':'')+'</div>'
+  +'<div class="p-box"><h4>Untuk '+(refund?'refund':'pembayaran')+'</h4><p>Invoice '+esc(b.invoiceNo)+' &middot; '+esc(tourTitle(b)||'-')+'</p><p>Metode: '+esc(p.method)+(p.ref?' &middot; Ref: '+esc(p.ref):'')+'</p>'+(p.note?'<p>'+esc(p.note)+'</p>':'')+'</div>'
   +'<div class="p-box"><h4>Status invoice setelah pembayaran ini</h4><p>'+(bal>0?'Sisa tagihan '+rp(bal):'Lunas')+'</p></div></div>'
   +'<div class="p-foot"><div></div><div class="p-sign"><div>Penerima,</div><div class="line"></div><b>'+esc(S.settings.signer||S.settings.name)+'</b><div style="color:#59627d;font-size:11.5px">'+esc(S.settings.signerTitle||'')+'</div></div></div></div>';
 }
@@ -1146,7 +1163,7 @@ function docHTML(title,inner){return '<!doctype html><html lang="id"><head><meta
 function invoiceText(id){
   const b=S.bookings[id],c=calc(b),st=S.settings;
   const L=['*'+(b.status==='draft'?'PROFORMA':'INVOICE')+' '+st.name+'*',b.invoiceNo+' · Kode '+b.code,'',
-    'Kepada: '+custName(b.customerId),'Paket: '+(b.destination||'-')];
+    'Kepada: '+custName(b.customerId),'Paket: '+(tourTitle(b)||'-')];
   const per=periodText(b);if(per&&per!=='-')L.push('Periode: '+per);
   L.push('','Rincian:');
   const pax=paxOf(b);
@@ -1922,7 +1939,7 @@ document.addEventListener('change',async e=>{
   else if(t.id==='repFrom'||t.id==='repTo'){ui[t.id]=t.value||ui[t.id];render(true)}
   else if(t.id==='stSel'&&ui.bookingId){await safe(async()=>{const b=clone(S.bookings[ui.bookingId]),before=clone(S.bookings[ui.bookingId]);b.status=t.value;{const g=seatGuard(b,ui.bookingId);if(g){toast(g);render(true);return}}if(holdsSeat(b)&&!holdsSeat(before))b.seatAt=Date.now();{const m=stamp();b.updatedBy=m.by;b.updatedByName=m.byName;b.updatedAt=Date.now()}await put('bookings',ui.bookingId,b);if(!(await seatVerify(ui.bookingId,b))){await put('bookings',ui.bookingId,before);toast('Kursi baru saja diambil booking lain. Status dikembalikan.');render(true);return}toast('Status diubah ke '+BSTAT[t.value])})}
   else if(t.id==='logoFile'){const f=t.files[0];if(!f||!FORM||!FORM.settings)return;const img=new Image(),u=URL.createObjectURL(f);img.onload=()=>{const k=Math.min(1,600/img.width),cv=document.createElement('canvas');cv.width=Math.round(img.width*k);cv.height=Math.round(img.height*k);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);FORM.D.logo=cv.toDataURL('image/png');ui.dirty=true;const im=$('#logoPrev');if(im){im.src=FORM.D.logo;im.hidden=false}URL.revokeObjectURL(u)};img.onerror=()=>toast('Gambar tidak bisa dibaca');img.src=u;t.value=''}
-  else if(t.dataset&&t.dataset.dep!==undefined&&FORM){const dep=S.departures[FORM.D.departureId];if(dep){const D=FORM.D;if(!(D.destination||'').trim())D.destination=dep.name;if(dep.departDate)D.departDate=dep.departDate;if(dep.returnDate)D.returnDate=dep.returnDate}FORM.rerender()}
+  else if(t.dataset&&t.dataset.dep!==undefined&&FORM){const dep=S.departures[FORM.D.departureId];if(dep){const D=FORM.D;{const dn=dep.departDate&&dep.returnDate?diffDays(dep.returnDate,dep.departDate):null,cur=(D.destination||'').trim(),auto=!cur||[T_37,T_38,T_24,T_25].includes(cur)||Object.values(S.departures).some(x=>x.name===cur);if(auto)D.destination=stdTour(dep.name,dn)||dep.name}if(dep.departDate)D.departDate=dep.departDate;if(dep.returnDate)D.returnDate=dep.returnDate}FORM.rerender()}
   else if(t.dataset&&t.dataset.pkgpick!==undefined&&FORM){const c=S.catalog[t.value];if(c){const D=FORM.D;D.pkgPrice=num(c.price);D.pkgCost=num(c.cost);if(!(D.destination||'').trim())D.destination=c.name}FORM.rerender()}
   else if(t.dataset&&t.dataset.pick!==undefined&&FORM){
     const idx=parseInt(t.dataset.pick),c=S.catalog[t.value],it=FORM.D.items[idx];
