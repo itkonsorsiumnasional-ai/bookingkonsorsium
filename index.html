@@ -349,6 +349,7 @@ const NAV=[['dashboard','Dashboard'],['booking','Booking & Invoice'],['rekap','R
 /* ============ Perhitungan ============ */
 const isChn=b=>b.taxFmt==='row'||(b.taxFmt==='auto'&&num(b.taxPct)>0);
 const discLabel=(b,agent)=>b.discMode==='after'?'Agen Komisi':(agent?'Agent Discount':'Diskon');
+const discDetail=b=>{const n=paxOf(b).length,p=num(b.discPerPax);return p&&n?' ('+n+' x '+rp(p)+')':''};
 const pctS=v=>String(num(v)).replace('.',',');
 function calc(b){
   const items=b.items||[],pax=paxOf(b);
@@ -358,14 +359,15 @@ function calc(b){
   const cost=pax.length*num(b.pkgCost)+items.reduce((a,i)=>a+num(i.qty)*num(i.cost),0);
   const tips=num(b.tipsPerPax)*pax.length;
   const gross=subtotal+tips;
-  const discount=num(b.discount);
+  const discPer=num(b.discPerPax);
+  const discount=discPer*pax.length+num(b.discount);
   const base=Math.max(0,subtotal-discount);
   const taxBase=(b.discMode==='after'?subtotal:base)+(String(b.tipsTaxable)==='1'?tips:0);
   const tax=Math.round(taxBase*num(b.taxPct)/100);
   const admin=num(b.adminFee);
   const total=base+tax+admin+tips;
   const paid=(b.payments||[]).reduce((a,p)=>a+num(p.amount),0);
-  return {paxTotal,itemsTotal,subtotal,tips,gross,cost,discount,base,taxBase,tax,admin,total,paid,balance:total-paid,margin:base-cost+admin};
+  return {paxTotal,itemsTotal,subtotal,tips,gross,cost,discount,discPer,base,taxBase,tax,admin,total,paid,balance:total-paid,margin:base-cost+admin};
 }
 function billRows(b){
   const R=[],pax=paxOf(b);
@@ -839,7 +841,7 @@ function vDetail(id){
   +'<div class="main"><div class="card"><div class="ch"><h2>Ringkasan tagihan</h2></div><div class="cb sumbox">'
   +'<div><span class="mut">Subtotal</span><span class="num">'+rp(c.subtotal)+'</span></div>'
   +(c.tips?'<div><span class="mut">Tips (non pajak)</span><span class="num">'+rp(c.tips)+'</span></div>':'')
-  +(c.discount?'<div><span class="mut">'+discLabel(b,true)+'</span><span class="num">-'+rp(c.discount)+'</span></div>':'')
+  +(c.discount?'<div><span class="mut">'+discLabel(b,true)+discDetail(b)+'</span><span class="num">-'+rp(c.discount)+'</span></div>':'')
   +(c.tax?'<div><span class="mut">Pajak '+pctS(b.taxPct)+'%</span><span class="num">'+rp(c.tax)+'</span></div>':'')
   +(c.admin?'<div><span class="mut">Biaya admin</span><span class="num">'+rp(c.admin)+'</span></div>':'')
   +'<div class="tot"><span>Total</span><span class="num">'+rp(c.total)+'</span></div>'
@@ -855,7 +857,7 @@ const blankFl=()=>({out:'',outRoute:'',in:'',inRoute:'',pnr:'',bag:''});
 function newBooking(){
   const t=todayISO(),st=S.settings;
   return {customerId:'',newCust:{name:'',phone:'',email:''},status:'confirmed',tripType:'Internasional',departureId:'',destination:'',pkgNote:'',periodText:'',departDate:'',returnDate:'',sales:'',code:'',
-    pkgPrice:0,pkgCost:0,tipsPerPax:0,discMode:'after',taxFmt:'auto',fl:blankFl(),
+    pkgPrice:0,pkgCost:0,tipsPerPax:0,discPerPax:0,discMode:'after',taxFmt:'auto',fl:blankFl(),
     passengers:[blankPax()],items:[],
     discount:0,adminFee:0,taxPct:num(st.taxPct),invoiceDate:t,dueDate:addDays(t,num(st.dueDays)||7),notes:'',dp:{amount:0,method:'Transfer Bank',date:t,ref:''}};
 }
@@ -866,7 +868,7 @@ function openBookingForm(id){
     D.id=id;D.items=D.items||[];D.items.forEach(i=>{if(i.catId===undefined)i.catId=''});
     D.fl={...blankFl(),...(D.fl||{})};
     D.passengers=(D.passengers||[]).map((p,i)=>({...blankPax(),...p,pid:p.pid||(id+'-'+i),price:(p.price===undefined||p.price===null)?'':p.price}));
-    ['pkgPrice','pkgCost','tipsPerPax'].forEach(k=>{if(D[k]===undefined)D[k]=0});
+    ['pkgPrice','pkgCost','tipsPerPax','discPerPax'].forEach(k=>{if(D[k]===undefined)D[k]=0});
     ['departureId','pkgNote','periodText','code'].forEach(k=>{if(D[k]===undefined)D[k]=''});
   }
   FORM={D,modal:true,onChange:updateSummary,rerender:()=>{const sb=$('#bsb');const y=sb?sb.scrollTop:0;if(sb){sb.innerHTML=bookingBody(D,editing);sb.scrollTop=y}updateSummary()}};
@@ -897,7 +899,8 @@ function bookingBody(D,editing){
   +'<fieldset><legend>Harga paket</legend><div class="fgrid">'
   +fld('Harga paket per orang (Rp)',inp('pkgPrice',nz(D.pkgPrice),{type:'number',min:0,ph:'0'}))
   +fld('Tips per orang, non pajak (Rp)',inp('tipsPerPax',nz(D.tipsPerPax),{type:'number',min:0,ph:'0'}))
-  +fld('Agent discount / diskon total (Rp)',inp('discount',nz(D.discount),{type:'number',min:0,ph:'0'}))
+  +fld('Agent discount per orang (Rp)',inp('discPerPax',nz(D.discPerPax),{type:'number',min:0,ph:'0'}))
+  +(num(D.discount)>0?fld('Diskon total, data lama (Rp)',inp('discount',nz(D.discount),{type:'number',min:0,ph:'0'})):'')
   +'</div><p class="hint" style="margin:8px 0 0">Setiap peserta otomatis memakai harga paket. Kosongkan kolom harga peserta untuk memakai harga paket, atau isi harga sendiri untuk anak, bayi, atau single.</p></fieldset>'
   +'<fieldset><legend>Penerbangan grup (berlaku untuk semua peserta kecuali diisi sendiri)</legend><div class="fgrid">'
   +fld('Flight berangkat',inp('fl.out',D.fl.out,{ph:'QZ324'}))+fld('Rute berangkat',inp('fl.outRoute',D.fl.outRoute,{ph:'SUB 07.00-KUL 10.35'}),'span2')
@@ -955,8 +958,8 @@ function updateSummary(){
   el.innerHTML='<div><span class="mut">Peserta ('+n+' orang)</span><span class="num">'+rp(c.paxTotal)+'</span></div>'
   +(c.itemsTotal?'<div><span class="mut">Biaya tambahan</span><span class="num">'+rp(c.itemsTotal)+'</span></div>':'')
   +(c.tips?'<div><span class="mut">Tips (non pajak)</span><span class="num">'+rp(c.tips)+'</span></div>':'')
-  +(isChn(D)?(c.tax?'<div><span class="mut">Pajak '+pctS(D.taxPct)+'%</span><span class="num">'+rp(c.tax)+'</span></div>':'')+(c.admin?'<div><span class="mut">Biaya admin</span><span class="num">'+rp(c.admin)+'</span></div>':'')+'<div><span class="mut">Total pembayaran</span><span class="num">'+rp(c.total+c.discount)+'</span></div>'+(c.discount?'<div><span class="mut">'+discLabel(D,true)+'</span><span class="num">-'+rp(c.discount)+'</span></div>':'')
-  :'<div><span class="mut">Total pembayaran</span><span class="num">'+rp(c.gross)+'</span></div>'+(c.discount?'<div><span class="mut">'+discLabel(D,true)+'</span><span class="num">-'+rp(c.discount)+'</span></div>':'')+(c.tax?'<div><span class="mut">Pajak '+pctS(D.taxPct)+'%</span><span class="num">'+rp(c.tax)+'</span></div>':'')+(c.admin?'<div><span class="mut">Biaya admin</span><span class="num">'+rp(c.admin)+'</span></div>':''))
+  +(isChn(D)?(c.tax?'<div><span class="mut">Pajak '+pctS(D.taxPct)+'%</span><span class="num">'+rp(c.tax)+'</span></div>':'')+(c.admin?'<div><span class="mut">Biaya admin</span><span class="num">'+rp(c.admin)+'</span></div>':'')+'<div><span class="mut">Total pembayaran</span><span class="num">'+rp(c.total+c.discount)+'</span></div>'+(c.discount?'<div><span class="mut">'+discLabel(D,true)+discDetail(D)+'</span><span class="num">-'+rp(c.discount)+'</span></div>':'')
+  :'<div><span class="mut">Total pembayaran</span><span class="num">'+rp(c.gross)+'</span></div>'+(c.discount?'<div><span class="mut">'+discLabel(D,true)+discDetail(D)+'</span><span class="num">-'+rp(c.discount)+'</span></div>':'')+(c.tax?'<div><span class="mut">Pajak '+pctS(D.taxPct)+'%</span><span class="num">'+rp(c.tax)+'</span></div>':'')+(c.admin?'<div><span class="mut">Biaya admin</span><span class="num">'+rp(c.admin)+'</span></div>':''))
   +'<div class="tot"><span>'+(isChn(D)?'Pelunasan':'Total bersih')+'</span><span class="num">'+rp(c.total)+'</span></div>'
   +(dp>0?'<div><span class="mut">DP dicatat</span><span class="num">'+rp(dp)+'</span></div><div><span class="mut">Sisa pembayaran</span><span class="num">'+rp(c.total-dp)+'</span></div>':'')
   +'';
@@ -1099,12 +1102,12 @@ function invoiceHTML(id){
   const dl=discLabel(b,cu.type==='Agen / Mitra');let T;
   if(isChn(b)){
     T=tr('Total Pembayaran',fnum(c.total+c.discount),'b');
-    if(c.discount)T+=tr(dl,fnum(c.discount));
+    if(c.discount)T+=tr(dl+discDetail(b),fnum(c.discount));
     T+=tr('Pelunasan',fnum(c.total),'b red');
   }else{
     T=tr('Total Pembayaran',fnum(c.gross),'b');
     const adj=c.discount||c.tax||c.admin;
-    if(c.discount)T+=tr(dl,fnum(c.discount));
+    if(c.discount)T+=tr(dl+discDetail(b),fnum(c.discount));
     if(c.tax)T+=tr('Pajak '+pctS(b.taxPct)+'%',fnum(c.tax));
     if(c.admin)T+=tr('Biaya Admin',fnum(c.admin));
     if(adj)T+=tr('Total Bersih',fnum(c.total),'b red');
@@ -1151,7 +1154,7 @@ function invoiceText(id){
   }else if(pax.length)L.push('- Peserta: '+pax.length+' pax');
   (b.items||[]).forEach(i=>L.push('- '+i.desc+' ('+num(i.qty)+' x '+rp(i.price)+') = '+rp(num(i.qty)*num(i.price))));
   if(c.tips)L.push('- Tips (non pajak) '+pax.length+' x '+rp(b.tipsPerPax)+' = '+rp(c.tips));
-  if(c.discount)L.push(discLabel(b,false)+': -'+rp(c.discount));if(c.tax)L.push('Pajak '+pctS(b.taxPct)+'%: '+rp(c.tax));if(c.admin)L.push('Biaya admin: '+rp(c.admin));
+  if(c.discount)L.push(discLabel(b,false)+discDetail(b)+': -'+rp(c.discount));if(c.tax)L.push('Pajak '+pctS(b.taxPct)+'%: '+rp(c.tax));if(c.admin)L.push('Biaya admin: '+rp(c.admin));
   L.push('','*Total: '+rp(c.total)+'*');if(c.paid)L.push('Sudah dibayar: '+rp(c.paid));
   L.push(c.balance>0?'*Sisa tagihan: '+rp(c.balance)+'*':'Status: LUNAS');
   if(c.balance>0&&b.dueDate)L.push('Pelunasan paling lambat: '+fmtLong(b.dueDate));
@@ -1787,7 +1790,7 @@ async function seed(){
       await put('departures','smpd1',{name:'TOUR 3 NEGARA ASIA',departDate:dd,returnDate:rd,quota:12,notes:'Data fiktif untuk contoh. Hapus lewat Pengaturan > Hapus data contoh.',tl:{name:'MR TOUR LEADER CONTOH',idNo:'A0000099',birth:'1990-01-15',expiry:addDays(t,1500),nat:'INDONESIA',flOut:'',flOutRoute:'',flIn:'QZ211',flInRoute:'KUL 20.45-CGK 21.55',pnr:'ABC123',bag:'0'},rooms,sample:true,createdAt:Date.now()});
       const P=(pid,name,no,exp,extra)=>({pid,name,type:'Dewasa',idNo:no,birth:'1985-05-05',expiry:exp,nat:'INDONESIA',...extra});
       const mkb=(o)=>({status:'confirmed',tripType:'Internasional',sales:'Rina',discount:0,adminFee:0,taxPct:0,notes:'',payments:[],departureId:'smpd1',destination:'TOUR 3 NEGARA ASIA MALAYSIA – SINGAPORE – THAILAND (HAT YAI) 7H6M',pkgNote:'Land Only',departDate:dd,returnDate:rd,invoiceDate:addDays(t,-5),dueDate:addDays(t,25),pkgPrice:4550000,pkgCost:4200000,tipsPerPax:650000,...o,sample:true,createdAt:Date.now()});
-      const bA=mkb({customerId:'smpc4',discount:1800000,fl:{out:'QZ324',outRoute:'SUB 07.00-KUL 10.35',in:'QZ325',inRoute:'KUL 11.10-SUB 12.50',pnr:'XQZLMN',bag:'0/0'},
+      const bA=mkb({customerId:'smpc4',discPerPax:450000,fl:{out:'QZ324',outRoute:'SUB 07.00-KUL 10.35',in:'QZ325',inRoute:'KUL 11.10-SUB 12.50',pnr:'XQZLMN',bag:'0/0'},
         passengers:[P('smpa1','MRS ANI CONTOH','A0000001',addDays(t,900)),P('smpa2','MRS BUDI CONTOH','A0000002',addDays(t,900)),P('smpa3','MR CANDRA CONTOH','A0000003',addDays(t,60)),P('smpa4','MRS DEWI CONTOH','A0000004',addDays(t,900))],
         payments:[{id:'p1',date:addDays(t,-4),method:'Transfer Bank',amount:6000000,ref:'TRF-4001',note:'DP'}]});
       const bB=mkb({customerId:'smpc5',fl:{out:'QZ204',outRoute:'CGK 14.10-KUL 17.20',in:'QZ205',inRoute:'KUL 18.00-CGK 19.10',pnr:'PLKMJN',bag:'0/20KG'},
