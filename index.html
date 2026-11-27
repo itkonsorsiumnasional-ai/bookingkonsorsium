@@ -349,6 +349,8 @@ const NAV=[['dashboard','Dashboard'],['booking','Booking & Invoice'],['rekap','R
 /* ============ Perhitungan ============ */
 const isChn=b=>b.taxFmt==='row'||(b.taxFmt==='auto'&&num(b.taxPct)>0);
 const discLabel=(b,agent)=>b.discMode==='after'?'Agen Komisi':(agent?'Agent Discount':'Diskon');
+/* Penandatangan invoice = pengguna yang membuat booking (nama terkini dari data pengguna); cadangan: nama tercatat saat dibuat, lalu Pengaturan */
+const signerName=b=>{const u=b&&b.createdBy&&S.users[b.createdBy];return (u&&(u.name||u.username))||(b&&b.createdByName)||S.settings.signer||''};
 const discDetail=b=>{const n=paxOf(b).length,p=num(b.discPerPax);return p&&n?' ('+n+' x '+rp(p)+')':''};
 const pctS=v=>String(num(v)).replace('.',',');
 function calc(b){
@@ -1123,7 +1125,7 @@ function invoiceHTML(id){
   +'<p class="lead">Dengan adanya pemesanan '+esc(title)+' ini, Berikut kami buat '+(proforma?'Proforma Invoice':'Kwitansi Pembayaran')+' sebagai berikut :</p>'
   +'<div class="p-scroll"><table class="it"><thead><tr><th style="width:62px">Peserta</th><th>Nama Tamu</th><th style="width:96px">Periode</th><th style="width:150px">Deskripsi</th><th style="width:84px">Harga</th><th style="width:44px">Unit</th><th style="width:96px">Total</th></tr></thead><tbody>'+rows+T+'</tbody></table></div>'
   +'<div class="ifoot"><div class="bank">'+bankHTML(st.banks)+'</div><div class="city">'+esc(st.city||'')+(st.city?', ':'')+fmtLong(b.invoiceDate)+'</div></div>'
-  +'<div class="isig"><div><div>Yang Menyerahkan</div><div class="sp"></div><div class="nm">'+esc(st.signer||'')+'</div></div><div><div>Yang Menerima</div><div class="sp"></div><div class="nm">'+esc(cu.name||'')+'</div></div></div>'
+  +'<div class="isig"><div><div>Yang Menyerahkan</div><div class="sp"></div><div class="nm">'+esc(signerName(b))+'</div></div><div><div>Yang Menerima</div><div class="sp"></div><div class="nm">'+esc(cu.name||'')+'</div></div></div>'
   +(notes.length?'<div class="notes"><b>Notes :</b><ul>'+notes.join('')+'</ul></div>':'')
   +(st.terms?'<div class="terms">'+termsHTML(st.terms)+'</div>':'')
   +'</div>';
@@ -1756,7 +1758,7 @@ function vSettings(){
   +'</div></div></div>'
   +'<div class="card"><div class="ch"><h2>Invoice</h2></div><div class="cb"><div class="fgrid">'
   +fld('Awalan nomor invoice',inp('invPrefix',D.invPrefix,{ph:'INV.KSN-'}))+fld('Nomor invoice pertama',inp('invStart',D.invStart,{type:'number',min:1}))+fld('Pajak bawaan (%)',inp('taxPct',nz(D.taxPct),{type:'number',min:0}))+fld('Jatuh tempo bawaan (hari)',inp('dueDays',D.dueDays,{type:'number',min:0}))
-  +fld('Nama penandatangan (Yang Menyerahkan)',inp('signer',D.signer))+fld('Jabatan',inp('signerTitle',D.signerTitle))
+  +fld('Nama penandatangan cadangan (dipakai bila pembuat booking tidak tercatat)',inp('signer',D.signer))+fld('Jabatan',inp('signerTitle',D.signerTitle))
   +fld('Rekening pembayaran (baris yang diawali "Rekening" ditebalkan)',txa('banks',D.banks,6),'full')
   +fld('Notes di bawah invoice (satu poin per baris, {DUE} = tanggal pelunasan, dicetak merah)',txa('notes',D.notes,6),'full')
   +fld('Notes untuk program China (dipakai bila Daftar notes = Program China, atau Otomatis dengan format Program China)',txa('notesChn',D.notesChn,6),'full')
