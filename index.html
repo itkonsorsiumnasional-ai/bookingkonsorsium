@@ -796,6 +796,13 @@ function vDashboard(){
   for(let i=5;i>=0;i--){const d=new Date(d0.getFullYear(),d0.getMonth()-i,1);months.push({k:d.getFullYear()+'-'+pad(d.getMonth()+1),l:d.toLocaleDateString('id-ID',{month:'short'}),bill:0,recv:0})}
   act.forEach(x=>{const m=months.find(m=>m.k===(x.b.invoiceDate||'').slice(0,7));if(m)m.bill+=x.c.total});
   B.forEach(x=>(x.b.payments||[]).forEach(p=>{const m=months.find(m=>m.k===(p.date||'').slice(0,7));if(m)m.recv+=num(p.amount)}));
+  const recent=B.slice().sort((x,y)=>(y.b.createdAt||0)-(x.b.createdAt||0)||(y.b.invoiceNo||'').localeCompare(x.b.invoiceNo||'')).slice(0,8);
+  const recentCard='<div class="card"><div class="ch"><h2>Reservasi terbaru</h2><button class="btn sm" data-act="nav" data-r="booking">Semua data</button></div>'
+  +(recent.length?'<div class="tablewrap"><table class="t" style="min-width:760px"><thead><tr><th>Customer</th><th>Tour paket</th><th>Status</th><th>Bayar</th><th class="r">Nominal</th></tr></thead><tbody>'
+  +recent.map(x=>{const p=payState(x.b);return '<tr class="click" data-act="open" data-id="'+x.id+'"><td><span class="strong">'+esc(custName(x.b.customerId))+'</span><div class="small mut">'+esc(x.b.code||x.b.invoiceNo||'')+(x.b.createdByName?' &middot; oleh '+esc(x.b.createdByName):'')+'</div></td>'
+    +'<td><span class="strong">'+esc(tourTitle(x.b)||'-')+'</span><div class="small mut">'+(x.b.departDate?fmtDate(x.b.departDate):'')+'</div></td>'
+    +'<td>'+pill(x.b.status==='completed'?'completed':x.b.status==='confirmed'?'confirmed':x.b.status==='cancelled'?'cancelled':'draft',BSTAT[x.b.status]||x.b.status)+'</td><td>'+pill(p.k,p.l)+'</td><td class="r num strong">'+rp(x.c.total)+'</td></tr>'}).join('')
+  +'</tbody></table></div>':'<div class="empty">Belum ada reservasi.</div>')+'</div>';
   const tobill=out.slice().sort((a,b)=>(a.b.dueDate||'9').localeCompare(b.b.dueDate||'9')).slice(0,6);
   return '<div class="pagehead"><div><h1>Dashboard</h1><p>Ringkasan per '+fmtDate(t)+'</p></div><div class="row"><button class="btn primary" data-act="new-booking">+ Booking baru</button></div></div>'
   +'<div class="kpis">'
@@ -805,6 +812,7 @@ function vDashboard(){
   +'<div class="card kpi"><small>Berangkat 30 hari ke depan</small><b class="num">'+up.length+' booking</b><span>'+up.reduce((a,x)=>a+(x.b.passengers||[]).length,0)+' peserta tercatat</span></div>'
   +'</div>'
   +'<div class="card"><div class="ch"><h2>Tagihan dan penerimaan, 6 bulan</h2><div class="legend"><span><i style="background:var(--blue)"></i>Tagihan</span><span><i style="background:var(--ok)"></i>Diterima</span></div></div><div class="cb">'+chart(months)+'</div></div>'
+  +recentCard
   +'<div class="cols">'
   +'<div class="card"><div class="ch"><h2>Perlu ditagih</h2><button class="btn sm" data-act="nav" data-r="booking">Semua booking</button></div>'
   +(tobill.length?'<div class="list">'+tobill.map(x=>'<div class="li" data-act="open" data-id="'+x.id+'"><div class="stack"><span class="strong">'+esc(custName(x.b.customerId))+'</span><span class="small mut">'+esc(x.b.invoiceNo)+' &middot; jatuh tempo '+fmtDate(x.b.dueDate)+'</span></div><div class="r stack"><span class="strong num">'+rp(x.c.balance)+'</span>'+(()=>{const p=payState(x.b);return pill(p.k,p.l)})()+'</div></div>').join('')+'</div>':'<div class="empty">Semua invoice sudah lunas.</div>')
