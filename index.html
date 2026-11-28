@@ -858,7 +858,7 @@ function vDetail(id){
   +'<div class="row"><select id="stSel" aria-label="Ubah status booking" style="width:auto">'+Object.entries(BSTAT).map(([k,l])=>'<option value="'+k+'"'+(b.status===k?' selected':'')+'>'+l+'</option>').join('')+'</select><button class="btn" data-act="edit-booking" data-id="'+id+'">Ubah</button><button class="btn primary" data-act="invoice" data-id="'+id+'">Lihat invoice</button></div></div>'
   +'<div class="detail-grid"><div class="main">'
   +'<div class="card"><div class="ch"><h2>Perjalanan</h2><div class="row">'+pill(b.status,BSTAT[b.status])+pill(p.k,p.l)+'</div></div><div class="cb"><div class="kv">'
-  +'<div><small>Paket / tujuan</small>'+esc(tourTitle(b)||'-')+(b.pkgNote?'<div class="small mut">'+esc(b.pkgNote)+'</div>':'')+'</div><div><small>Periode</small>'+esc(periodText(b))+'</div><div><small>Jenis</small>'+esc(b.tripType||'-')+'</div>'
+  +'<div><small>Paket / tujuan</small>'+esc(tourTitle(b)||'-')+(b.pkgNote?'<div class="small mut">'+esc(b.pkgNote)+'</div>':'')+'</div><div><small>Periode</small>'+esc(periodText(b))+(b.startCity?'<div class="small mut">Start '+esc(b.startCity)+'</div>':'')+'</div><div><small>Jenis</small>'+esc(b.tripType||'-')+'</div>'
   +'<div><small>Keberangkatan (rekap)</small>'+(dep?'<button class="linkbtn" data-act="goto-dep" data-id="'+b.departureId+'">'+esc(dep.name)+' &rarr;</button>':'<span class="mut">Belum dihubungkan</span>')+'</div>'
   +'<div><small>Pelanggan / agen</small>'+esc(cu.name||'-')+'<div class="small mut">'+esc([cu.phone,cu.email].filter(Boolean).join(' · '))+'</div></div><div><small>Sales</small>'+esc(b.sales||'-')+'</div><div><small>Dibuat oleh</small>'+esc(b.createdByName||'-')+(b.createdAt?'<div class="small mut">'+new Date(b.createdAt).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})+'</div>':'')+'</div>'+(b.updatedByName?'<div><small>Terakhir diubah oleh</small>'+esc(b.updatedByName)+(b.updatedAt?'<div class="small mut">'+new Date(b.updatedAt).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})+'</div>':'')+'</div>':'')+'<div><small>Tanggal invoice</small>'+fmtDate(b.invoiceDate)+'</div><div><small>Jatuh tempo / pelunasan</small>'+fmtDate(b.dueDate)+'</div></div>'
   +(b.notes?'<p class="small mut" style="margin:14px 0 0;white-space:pre-line">'+esc(b.notes)+'</p>':'')+'</div></div>'
@@ -889,7 +889,7 @@ const blankPax=()=>({pid:uid(),name:'',type:'Dewasa',idNo:'',price:'',note:'',bi
 const blankFl=()=>({out:'',outRoute:'',in:'',inRoute:'',pnr:'',bag:''});
 function newBooking(){
   const t=todayISO(),st=S.settings;
-  return {customerId:'',newCust:{name:'',phone:'',email:''},status:'confirmed',tripType:'Internasional',departureId:'',destination:'',pkgNote:'',periodText:'',departDate:'',returnDate:'',sales:'',code:'',
+  return {customerId:'',newCust:{name:'',phone:'',email:''},status:'confirmed',tripType:'Internasional',departureId:'',destination:'',pkgNote:'',periodText:'',startCity:'',departDate:'',returnDate:'',sales:'',code:'',
     pkgPrice:0,pkgCost:0,tipsPerPax:0,discPerPax:0,discMode:'after',taxFmt:'auto',fl:blankFl(),
     passengers:[blankPax()],items:[],
     discount:0,adminFee:0,taxPct:num(st.taxPct),invoiceDate:t,dueDate:addDays(t,num(st.dueDays)||7),notes:'',dp:{amount:0,method:'Transfer Bank',date:t,ref:''}};
@@ -902,7 +902,7 @@ function openBookingForm(id){
     D.fl={...blankFl(),...(D.fl||{})};
     D.passengers=(D.passengers||[]).map((p,i)=>({...blankPax(),...p,pid:p.pid||(id+'-'+i),price:(p.price===undefined||p.price===null)?'':p.price}));
     ['pkgPrice','pkgCost','tipsPerPax','discPerPax'].forEach(k=>{if(D[k]===undefined)D[k]=0});
-    ['departureId','pkgNote','periodText','code'].forEach(k=>{if(D[k]===undefined)D[k]=''});
+    ['departureId','pkgNote','periodText','startCity','code'].forEach(k=>{if(D[k]===undefined)D[k]=''});
   }
   FORM={D,modal:true,onChange:updateSummary,rerender:()=>{const sb=$('#bsb');const y=sb?sb.scrollTop:0;if(sb){sb.innerHTML=bookingBody(D,editing);sb.scrollTop=y}updateSummary()}};
   openModal('<div class="sh"><h2>'+(editing?'Ubah booking '+esc(D.code):'Booking baru')+'</h2><button class="x" data-act="close" aria-label="Tutup">&times;</button></div><div class="sb" id="bsb">'+bookingBody(D,editing)+'</div><div class="sf"><span class="err" id="ferr"></span><button class="btn" data-act="close">Batal</button><button class="btn primary" data-act="save-booking">'+(editing?'Simpan perubahan':'Simpan booking')+'</button></div>','wide');
@@ -926,6 +926,7 @@ function bookingBody(D,editing){
   +fld('Jenis perjalanan',sel('tripType',D.tripType,TRIPS))
   +fld('Tanggal berangkat',inp('departDate',D.departDate,{type:'date'}))+fld('Tanggal pulang',inp('returnDate',D.returnDate,{type:'date'}))
   +fld('Teks periode di invoice (opsional)',inp('periodText',D.periodText,{ph:'Otomatis dari tanggal'}))
+  +fld('Start keberangkatan / kota (opsional)',inp('startCity',D.startCity,{ph:'Contoh: SUB, CGK, Surabaya'}))
   +fld('Status booking',sel('status',D.status,Object.entries(BSTAT)))+fld('Sales / PIC',inp('sales',D.sales))
   +fld('Kode booking',inp('code',D.code,{ph:editing?'':'Otomatis (5 huruf)'}))
   +'</div></fieldset>'
@@ -1126,7 +1127,7 @@ function invoiceHTML(id){
     const pr=p?pxPrice(b,p):0;
     rows+='<tr>'+(i===0?'<td class="top" rowspan="'+prs.length+'">'+pax.length+' Pax</td>':'')
       +'<td class="nm">'+(p?(i+1)+'.'+esc(p.name.trim()):'-')+'</td>'
-      +(i===0?'<td class="c" rowspan="'+prs.length+'">'+esc(periodText(b))+'</td><td class="ds" rowspan="'+prs.length+'">'+esc(title)+(b.pkgNote?'<small>'+esc(b.pkgNote)+'</small>':'')+'</td>':'')
+      +(i===0?'<td class="c" rowspan="'+prs.length+'">'+esc(periodText(b))+(b.startCity&&b.startCity.trim()?'<div style="margin-top:4px">Start '+esc(b.startCity.trim())+'</div>':'')+'</td><td class="ds" rowspan="'+prs.length+'">'+esc(title)+(b.pkgNote?'<small>'+esc(b.pkgNote)+'</small>':'')+'</td>':'')
       +'<td class="r">'+(p&&priced?fnum(pr):'')+'</td><td class="c">'+(p&&priced?1:'')+'</td><td class="r">'+(p&&priced?fnum(pr):'')+'</td></tr>';
   });
   (b.items||[]).forEach(i=>{rows+='<tr><td></td><td>'+esc(i.desc)+'</td><td></td><td></td><td class="r">'+fnum(i.price)+'</td><td class="c">'+num(i.qty)+'</td><td class="r">'+fnum(num(i.qty)*num(i.price))+'</td></tr>'});
@@ -1179,7 +1180,7 @@ function invoiceText(id){
   const b=S.bookings[id],c=calc(b),st=S.settings;
   const L=['*'+(b.status==='draft'?'PROFORMA':'INVOICE')+' '+st.name+'*',b.invoiceNo+' · Kode '+b.code,'',
     'Kepada: '+custName(b.customerId),'Paket: '+(tourTitle(b)||'-')];
-  const per=periodText(b);if(per&&per!=='-')L.push('Periode: '+per);
+  const per=periodText(b);if(per&&per!=='-')L.push('Periode: '+per+(b.startCity&&b.startCity.trim()?' (Start '+b.startCity.trim()+')':''));
   L.push('','Rincian:');
   const pax=paxOf(b);
   if(isPaxPriced(b)){
